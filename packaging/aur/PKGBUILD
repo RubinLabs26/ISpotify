@@ -1,0 +1,58 @@
+# Maintainer: ISpotify contributors <releases at ispotify dot invalid>
+
+pkgname=ispotify
+pkgver=17.0.0
+pkgrel=1
+pkgdesc='Desktop music search, playlist, download, and playback application'
+arch=('any')
+url='https://github.com/itzlalpekhlua/ISpotify'
+license=('MIT')
+depends=(
+  'python'
+  'pyside6'
+  'qt6-multimedia'
+  'qt6-multimedia-ffmpeg'
+  'yt-dlp'
+  'python-requests'
+  'ffmpeg'
+  'deno'
+)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('9fc0f354c40146313ce0708e7e75982431ee96951d690bf568eaca42bbff5570')
+
+check() {
+  cd "ISpotify-$pkgver"
+  python -m compileall -q main.py core ui tests
+  python -m unittest discover -s tests -v
+}
+
+package() {
+  cd "ISpotify-$pkgver"
+
+  install -d "$pkgdir/usr/lib/ispotify"
+  cp -a assets core ui "$pkgdir/usr/lib/ispotify/"
+  install -m644 main.py "$pkgdir/usr/lib/ispotify/main.py"
+  find "$pkgdir/usr/lib/ispotify" -type d -name __pycache__ -prune -exec rm -rf '{}' +
+
+  install -Dm755 /dev/stdin "$pkgdir/usr/bin/ispotify" <<'EOF'
+#!/bin/sh
+exec /usr/bin/python /usr/lib/ispotify/main.py "$@"
+EOF
+
+  install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/ispotify.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=iSpotify
+Comment=Search, play, and download music
+Exec=ispotify
+Icon=ispotify
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+StartupNotify=true
+EOF
+
+  install -Dm644 assets/branding/ispotify-logo.png \
+    "$pkgdir/usr/share/icons/hicolor/256x256/apps/ispotify.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

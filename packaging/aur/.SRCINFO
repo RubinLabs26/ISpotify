@@ -1,0 +1,19 @@
+pkgbase = ispotify
+	pkgdesc = Desktop music search, playlist, download, and playback application
+	pkgver = 17.0.0
+	pkgrel = 1
+	url = https://github.com/itzlalpekhlua/ISpotify
+	arch = any
+	license = MIT
+	depends = python
+	depends = pyside6
+	depends = qt6-multimedia
+	depends = qt6-multimedia-ffmpeg
+	depends = yt-dlp
+	depends = python-requests
+	depends = ffmpeg
+	depends = deno
+	source = ispotify-17.0.0.tar.gz::https://github.com/itzlalpekhlua/ISpotify/archive/refs/tags/v17.0.0.tar.gz
+	sha256sums = 9fc0f354c40146313ce0708e7e75982431ee96951d690bf568eaca42bbff5570
+
+pkgname = ispotify
