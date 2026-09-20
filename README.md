@@ -35,6 +35,12 @@ before it changes the system. Run the checker by itself with:
 curl -fsSL https://raw.githubusercontent.com/RubinLabs26/ISpotify/main/packaging/install-linux.sh | bash -s -- --check
 ```
 
+Application downloads use aria2 with eight connections, live progress and
+speed reporting, and automatic resume. If aria2 is missing, the installer
+detects apt, dnf, yum, pacman, zypper, apk, XBPS, or Portage and installs it.
+Interrupted downloads remain under `~/.cache/ispotify/downloads` until the
+next run completes and verifies them.
+
 The standalone Linux executable targets x86-64 distributions with glibc 2.36
 or newer, including current Debian, Ubuntu, Fedora, and Arch Linux releases.
 

@@ -9,6 +9,7 @@ MINIMUM_GLIBC="2.36"
 MINIMUM_DISK_KB=307200
 
 data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
 bin_home="${XDG_BIN_HOME:-$HOME/.local/bin}"
 app_dir="$data_home/ispotify"
 application_dir="$data_home/applications"
@@ -18,6 +19,7 @@ version_file="$app_dir/version"
 launcher="$bin_home/ispotify"
 desktop_file="$application_dir/ispotify.desktop"
 icon_file="$icon_dir/ispotify.png"
+download_cache="$cache_home/ispotify/downloads"
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   reset=$'\033[0m'; bold=$'\033[1m'; dim=$'\033[2m'
@@ -55,7 +57,61 @@ Usage: install.sh [option]
   --help        Show this help
 
 Set ISPOTIFY_VERSION to install a specific release, for example 18.0.0.
+Interrupted application downloads are resumed from ~/.cache/ispotify/downloads.
 EOF
+}
+
+detect_package_manager() {
+  local manager
+  for manager in apt-get dnf yum pacman zypper apk xbps-install emerge; do
+    command -v "$manager" >/dev/null 2>&1 && { printf '%s' "$manager"; return 0; }
+  done
+  return 1
+}
+
+run_as_root() {
+  if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+    "$@"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+  else
+    printf '%saria2 needs administrator access, but sudo is not installed.%s\n' "$red" "$reset" >&2
+    return 1
+  fi
+}
+
+install_aria2() {
+  local manager="$1"
+  step "Installing aria2 with $manager"
+  case "$manager" in
+    apt-get)
+      run_as_root apt-get update
+      run_as_root apt-get install -y aria2
+      ;;
+    dnf) run_as_root dnf install -y aria2 ;;
+    yum) run_as_root yum install -y aria2 ;;
+    pacman) run_as_root pacman -Sy --needed --noconfirm aria2 ;;
+    zypper) run_as_root zypper --non-interactive install aria2 ;;
+    apk) run_as_root apk add aria2 ;;
+    xbps-install) run_as_root xbps-install -Sy aria2 ;;
+    emerge) run_as_root emerge --ask=n net-misc/aria2 ;;
+    *) return 1 ;;
+  esac
+  command -v aria2c >/dev/null 2>&1
+}
+
+ensure_aria2() {
+  local manager=""
+  if command -v aria2c >/dev/null 2>&1; then
+    pass "Download engine" "aria2 already installed"
+    return 0
+  fi
+  manager="$(detect_package_manager || true)"
+  if [[ -z "$manager" ]]; then
+    printf '%sNo supported package manager was found to install aria2.%s\n' "$yellow" "$reset" >&2
+    return 1
+  fi
+  install_aria2 "$manager"
 }
 
 download() {
@@ -64,6 +120,9 @@ download() {
     curl --fail --location --silent --show-error "$url" --output "$destination"
   elif command -v wget >/dev/null 2>&1; then
     wget --quiet "$url" --output-document="$destination"
+  elif command -v aria2c >/dev/null 2>&1; then
+    aria2c --quiet=true --allow-overwrite=true --auto-file-renaming=false \
+      --dir="$(dirname "$destination")" --out="$(basename "$destination")" "$url"
   else
     return 1
   fi
@@ -83,29 +142,37 @@ format_bytes() {
 }
 
 download_with_progress() {
-  local url="$1" destination="$2" stats="" size=0 elapsed=0 speed=0
-  local started=0 finished=0
+  local url="$1" destination="$2" started finished elapsed size speed
+  local partial="$destination.aria2"
 
-  printf '  %s%s%s\n' "$bold" "Downloading the iSpotify application…" "$reset"
-  if command -v curl >/dev/null 2>&1; then
-    stats="$(curl --fail --location --show-error \
-      --output "$destination" \
-      --write-out '%{size_download} %{time_total} %{speed_download}' \
-      "$url")" || return 1
-    read -r size elapsed speed <<<"$stats"
-  elif command -v wget >/dev/null 2>&1; then
-    started="$(date +%s)"
-    wget --progress=bar:force:noscroll "$url" --output-document="$destination" || return 1
-    finished="$(date +%s)"
-    size="$(wc -c <"$destination")"
-    elapsed=$((finished - started))
-    (( elapsed > 0 )) || elapsed=1
-    speed=$((size / elapsed))
+  command -v aria2c >/dev/null 2>&1 || return 1
+  install -d -- "$(dirname "$destination")"
+  if [[ -s "$destination" || -s "$partial" ]]; then
+    printf '  %sResuming cached download from %s%s\n' "$cyan" "$(dirname "$destination")" "$reset"
   else
-    return 1
+    printf '  %sDownloading with 8 aria2 connections%s\n' "$bold" "$reset"
   fi
 
-  printf '  %s✓%s Downloaded %s in %.1f s — average %s/s\n' \
+  started="$(date +%s)"
+  aria2c \
+    --continue=true \
+    --max-connection-per-server=8 \
+    --split=8 \
+    --min-split-size=1M \
+    --file-allocation=none \
+    --allow-overwrite=true \
+    --auto-file-renaming=false \
+    --summary-interval=1 \
+    --console-log-level=notice \
+    --dir="$(dirname "$destination")" \
+    --out="$(basename "$destination")" \
+    "$url"
+  finished="$(date +%s)"
+  size="$(wc -c <"$destination")"
+  elapsed=$((finished - started))
+  (( elapsed > 0 )) || elapsed=1
+  speed=$((size / elapsed))
+  printf '  %s✓%s Downloaded %s in %d s — average %s/s\n' \
     "$green" "$reset" "$(format_bytes "$size")" "$elapsed" "$(format_bytes "$speed")"
 }
 
@@ -115,6 +182,15 @@ download_stdout() {
     curl --fail --location --silent --show-error "$url"
   elif command -v wget >/dev/null 2>&1; then
     wget --quiet "$url" --output-document=-
+  elif command -v aria2c >/dev/null 2>&1; then
+    local temporary_file
+    temporary_file="$(mktemp)"
+    aria2c --quiet=true --allow-overwrite=true --auto-file-renaming=false \
+      --dir="$(dirname "$temporary_file")" --out="$(basename "$temporary_file")" "$url" || {
+        rm -f -- "$temporary_file"; return 1;
+      }
+    cat "$temporary_file"
+    rm -f -- "$temporary_file"
   else
     return 1
   fi
@@ -170,7 +246,7 @@ resolve_latest_version() {
 
 system_summary() {
   local distro="Unknown Linux" desktop="${XDG_CURRENT_DESKTOP:-${DESKTOP_SESSION:-Not detected}}"
-  local session="${XDG_SESSION_TYPE:-unknown}" memory_mb="unknown" cpu="unknown"
+  local session="${XDG_SESSION_TYPE:-unknown}" memory_mb="unknown" cpu="unknown" manager=""
   if [[ -r /etc/os-release ]]; then
     distro="$(. /etc/os-release; printf '%s' "${PRETTY_NAME:-${NAME:-Linux}}")"
   fi
@@ -184,6 +260,8 @@ system_summary() {
   info "Architecture" "$(uname -m)"
   info "Memory" "$memory_mb"
   info "Desktop" "$desktop ($session)"
+  manager="$(detect_package_manager || true)"
+  info "Package manager" "${manager:-not detected}"
 }
 
 compatibility_checks() {
@@ -215,12 +293,14 @@ compatibility_checks() {
     fail "Core utilities" "sha256sum and install are required"
   fi
 
-  if command -v curl >/dev/null 2>&1; then
-    pass "Downloader" "curl"
-  elif command -v wget >/dev/null 2>&1; then
-    pass "Downloader" "wget"
+  if command -v aria2c >/dev/null 2>&1; then
+    pass "Download engine" "aria2 with resume support"
+  elif command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; then
+    warn "Download engine" "aria2 will be installed automatically"
+  elif detect_package_manager >/dev/null 2>&1; then
+    warn "Download engine" "aria2 will be installed before downloading"
   else
-    fail "Downloader" "curl or wget is required"
+    fail "Download engine" "aria2 is missing and no supported package manager was found"
   fi
 
   disk_kb="$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {print $4}' || printf '0')"
@@ -331,6 +411,16 @@ banner
 system_summary
 compatibility_checks
 
+if [[ "$mode" == "install" ]] && \
+   ! command -v aria2c >/dev/null 2>&1 && \
+   ! command -v curl >/dev/null 2>&1 && \
+   ! command -v wget >/dev/null 2>&1; then
+  ensure_aria2 || {
+    printf '\n%sUnable to install aria2 automatically. Install it manually and run this installer again.%s\n' "$red" "$reset"
+    exit 1
+  }
+fi
+
 current_version="$(installed_version)"
 requested_version="${ISPOTIFY_VERSION:-latest}"
 latest_version=""
@@ -358,26 +448,38 @@ if [[ "$current_version" == "$latest_version" && "$force_install" -eq 0 ]]; then
   exit 0
 fi
 
+if ! ensure_aria2; then
+  printf '\n%sUnable to install aria2 automatically. Install aria2 with your package manager and run this installer again.%s\n' "$red" "$reset"
+  exit 1
+fi
+
 tag="v$latest_version"
 release_base="https://github.com/$REPOSITORY/releases/download/$tag"
 temporary_dir="$(mktemp -d)"
+cached_release_dir="$download_cache/$tag"
 trap 'rm -rf -- "$temporary_dir"' EXIT
+install -d -- "$cached_release_dir"
 
 printf '\n'
 step "[1/5] Downloading iSpotify $latest_version"
-download_with_progress "$release_base/$ASSET_NAME" "$temporary_dir/$ASSET_NAME"
-download "$release_base/$ASSET_NAME.sha256" "$temporary_dir/$ASSET_NAME.sha256"
+download_with_progress "$release_base/$ASSET_NAME" "$cached_release_dir/$ASSET_NAME"
+download "$release_base/$ASSET_NAME.sha256" "$cached_release_dir/$ASSET_NAME.sha256"
 download "$release_base/$ICON_NAME" "$temporary_dir/$ICON_NAME"
 
 step "[2/5] Verifying SHA-256 checksum"
 (
-  cd "$temporary_dir"
+  cd "$cached_release_dir"
   sha256sum --check --status "$ASSET_NAME.sha256"
-) || { printf '%sChecksum verification failed. Nothing was installed.%s\n' "$red" "$reset"; exit 1; }
+) || {
+  rm -f -- "$cached_release_dir/$ASSET_NAME" "$cached_release_dir/$ASSET_NAME.aria2" \
+    "$cached_release_dir/$ASSET_NAME.sha256"
+  printf '%sChecksum verification failed. The invalid download was removed and nothing was installed.%s\n' "$red" "$reset"
+  exit 1
+}
 
 step "[3/5] Installing application files"
 install -d -- "$app_dir" "$bin_home" "$application_dir" "$icon_dir"
-install -m 755 -- "$temporary_dir/$ASSET_NAME" "$executable"
+install -m 755 -- "$cached_release_dir/$ASSET_NAME" "$executable"
 install -m 644 -- "$temporary_dir/$ICON_NAME" "$icon_file"
 printf '%s\n' "$latest_version" >"$version_file"
 ln -sfn -- "$executable" "$launcher"
@@ -399,6 +501,9 @@ chmod 644 "$desktop_file"
 refresh_desktop
 
 step "[5/5] Finishing setup"
+rm -f -- "$cached_release_dir/$ASSET_NAME" "$cached_release_dir/$ASSET_NAME.aria2" \
+  "$cached_release_dir/$ASSET_NAME.sha256"
+rmdir -- "$cached_release_dir" 2>/dev/null || true
 printf '\n%s%s✓ iSpotify %s installed successfully.%s\n' "$bold" "$green" "$latest_version" "$reset"
 printf '  Open it from the application menu or run: %s\n' "$launcher"
 if [[ ":$PATH:" != *":$bin_home:"* ]]; then
