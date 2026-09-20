@@ -58,7 +58,7 @@ Usage: install.sh [options]
   --repo        Add the signed APT or pacman repository and install from it
   --standalone  Install the portable application for the current user
   --yes         Accept the recommended repository option without prompting
-  --uninstall   Remove iSpotify from the current user account
+  --uninstall   Remove iSpotify and its configured package repository
   --help        Show this help
 
 Set ISPOTIFY_VERSION to install a specific release, for example 18.0.0.

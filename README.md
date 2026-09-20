@@ -17,8 +17,8 @@ curl -fsSL https://raw.githubusercontent.com/RubinLabs26/ISpotify/main/packaging
 ```
 
 The script checks compatibility, detects the package manager, and offers the
-signed APT or pacman repository where supported. Other distributions receive
-the portable user installation. It installs aria2 automatically for fast,
+signed APT or pacman repository where supported. Other compatible glibc
+distributions receive the portable user installation. It installs aria2 for fast,
 resumable downloads with live progress and speed. Partial files remain in
 `~/.cache/ispotify/downloads` until installation succeeds.
 
