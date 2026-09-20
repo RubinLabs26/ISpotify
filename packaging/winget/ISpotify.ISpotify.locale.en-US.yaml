@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 
 PackageIdentifier: ISpotify.ISpotify
-PackageVersion: 18.0.0
+PackageVersion: 19.0.0
 PackageLocale: en-US
 Publisher: ISpotify
 PublisherUrl: https://github.com/RubinLabs26
@@ -19,8 +19,9 @@ Tags:
   - music
   - player
 ReleaseNotes: |-
-  Removes the hosted backend and performs searches and downloads directly from the desktop application.
-  Adds local YouTube cookie validation and a Settings page for sign-in and bot-check errors.
-ReleaseNotesUrl: https://github.com/RubinLabs26/ISpotify/releases/tag/v18.0.0
+  Adds browser-based Discord account login through the official Social SDK.
+  Shows the current track as a Discord listening activity.
+  Fixes a native crash in Discord authorization and improves download and device handling.
+ReleaseNotesUrl: https://github.com/RubinLabs26/ISpotify/releases/tag/v19.0.0
 ManifestType: defaultLocale
 ManifestVersion: 1.12.0
