@@ -6,7 +6,7 @@ from core.discord_presence import (
     presence_payload,
     valid_application_id,
 )
-from core.discord_social_sdk import APPLICATION_ID, TokenStore
+from core.discord_social_sdk import APPLICATION_ID, TokenStore, _friendly_login_error
 
 
 class DiscordPresenceTests(unittest.TestCase):
@@ -19,6 +19,16 @@ class DiscordPresenceTests(unittest.TestCase):
     def test_uses_official_ispotify_application(self):
         self.assertEqual(DEFAULT_APPLICATION_ID, str(APPLICATION_ID))
         self.assertEqual(APPLICATION_ID, 1551266524839411752)
+
+    def test_explains_missing_discord_oauth_configuration(self):
+        self.assertIn(
+            "http://127.0.0.1/callback",
+            _friendly_login_error('OAuth2 Error: Missing "redirect_uri"'),
+        )
+        self.assertIn(
+            "Public Client",
+            _friendly_login_error("OAuth2 Error: invalid_client"),
+        )
 
     @patch("core.discord_presence.time.time", return_value=2_000)
     def test_builds_listening_activity_with_elapsed_time(self, _time):

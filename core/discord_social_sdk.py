@@ -49,6 +49,18 @@ def _copy_string(value: DiscordString) -> str:
     return ctypes.string_at(value.ptr, value.size).decode("utf-8", errors="replace")
 
 
+def _friendly_login_error(message: str) -> str:
+    lowered = message.lower()
+    if "redirect_uri" in lowered:
+        return (
+            "Discord setup required: add http://127.0.0.1/callback "
+            "as an OAuth2 redirect URL"
+        )
+    if "invalid_client" in lowered:
+        return "Discord setup required: enable Public Client on the OAuth2 page"
+    return f"Discord login failed: {message}"
+
+
 def sdk_library_path() -> Path:
     filename = (
         "discord_partner_sdk.dll"
@@ -162,7 +174,7 @@ class DiscordSocialClient:
         lib.Discord_Client_Disconnect.argtypes = [pointer]
         lib.Discord_Client_Connect.argtypes = [pointer]
         lib.Discord_Client_ClearRichPresence.argtypes = [pointer]
-        lib.Discord_Client_CloseAuthorizeDeviceScreen.argtypes = [pointer]
+        lib.Discord_Client_AbortAuthorize.argtypes = [pointer]
 
         lib.Discord_ClientResult_Successful.argtypes = [pointer]
         lib.Discord_ClientResult_Successful.restype = ctypes.c_bool
@@ -170,15 +182,17 @@ class DiscordSocialClient:
         lib.Discord_ClientResult_Drop.argtypes = [pointer]
 
         lib.Discord_Client_GetDefaultPresenceScopes.argtypes = [string_pointer]
-        lib.Discord_DeviceAuthorizationArgs_Init.argtypes = [pointer]
-        lib.Discord_DeviceAuthorizationArgs_Drop.argtypes = [pointer]
-        lib.Discord_DeviceAuthorizationArgs_SetClientId.argtypes = [
+        lib.Discord_AuthorizationArgs_Init.argtypes = [pointer]
+        lib.Discord_AuthorizationArgs_Drop.argtypes = [pointer]
+        lib.Discord_AuthorizationArgs_SetClientId.argtypes = [pointer, ctypes.c_uint64]
+        lib.Discord_AuthorizationArgs_SetScopes.argtypes = [pointer, DiscordString]
+        lib.Discord_AuthorizationArgs_SetCodeChallenge.argtypes = [pointer, pointer]
+        lib.Discord_AuthorizationCodeChallenge_Drop.argtypes = [pointer]
+        lib.Discord_AuthorizationCodeVerifier_Drop.argtypes = [pointer]
+        lib.Discord_AuthorizationCodeVerifier_Challenge.argtypes = [pointer, pointer]
+        lib.Discord_AuthorizationCodeVerifier_Verifier.argtypes = [
             pointer,
-            ctypes.c_uint64,
-        ]
-        lib.Discord_DeviceAuthorizationArgs_SetScopes.argtypes = [
-            pointer,
-            DiscordString,
+            string_pointer,
         ]
 
         self.TokenCallback = ctypes.CFUNCTYPE(
@@ -191,6 +205,13 @@ class DiscordSocialClient:
             DiscordString,
             ctypes.c_void_p,
         )
+        self.AuthorizationCallback = ctypes.CFUNCTYPE(
+            None,
+            pointer,
+            DiscordString,
+            DiscordString,
+            ctypes.c_void_p,
+        )
         self.ResultCallback = ctypes.CFUNCTYPE(None, pointer, ctypes.c_void_p)
         self.StatusCallback = ctypes.CFUNCTYPE(
             None, ctypes.c_int, ctypes.c_int, ctypes.c_int32, ctypes.c_void_p
@@ -200,9 +221,23 @@ class DiscordSocialClient:
         )
         self.VoidCallback = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
 
-        lib.Discord_Client_GetTokenFromDevice.argtypes = [
+        lib.Discord_Client_CreateAuthorizationCodeVerifier.argtypes = [
             pointer,
             pointer,
+        ]
+        lib.Discord_Client_Authorize.argtypes = [
+            pointer,
+            pointer,
+            self.AuthorizationCallback,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+        ]
+        lib.Discord_Client_GetToken.argtypes = [
+            pointer,
+            ctypes.c_uint64,
+            DiscordString,
+            DiscordString,
+            DiscordString,
             self.TokenCallback,
             ctypes.c_void_p,
             ctypes.c_void_p,
@@ -356,22 +391,65 @@ class DiscordSocialClient:
 
     def login(self) -> None:
         self._authorizing = True
+        verifier = Opaque()
+        challenge = Opaque()
         args = Opaque()
-        self.lib.Discord_DeviceAuthorizationArgs_Init(ctypes.byref(args))
+        self.lib.Discord_Client_CreateAuthorizationCodeVerifier(
+            ctypes.byref(self.client), ctypes.byref(verifier)
+        )
+        self.lib.Discord_AuthorizationCodeVerifier_Challenge(
+            ctypes.byref(verifier), ctypes.byref(challenge)
+        )
+        verifier_value = DiscordString()
+        self.lib.Discord_AuthorizationCodeVerifier_Verifier(
+            ctypes.byref(verifier), ctypes.byref(verifier_value)
+        )
+        verifier_text = self._owned_string(verifier_value)
+        self.lib.Discord_AuthorizationArgs_Init(ctypes.byref(args))
         try:
-            self.lib.Discord_DeviceAuthorizationArgs_SetClientId(
+            self.lib.Discord_AuthorizationArgs_SetClientId(
                 ctypes.byref(args), APPLICATION_ID
             )
             scopes, scopes_buffer = _input_string(self._default_scopes())
-            self.lib.Discord_DeviceAuthorizationArgs_SetScopes(
+            self.lib.Discord_AuthorizationArgs_SetScopes(
                 ctypes.byref(args), scopes
             )
-            self._request_tokens("login", args)
+            self.lib.Discord_AuthorizationArgs_SetCodeChallenge(
+                ctypes.byref(args), ctypes.byref(challenge)
+            )
+
+            @self._remember
+            @self.AuthorizationCallback
+            def authorized(result, code, redirect_uri, _user_data):
+                code_text = self._owned_string(code)
+                redirect_text = self._owned_string(redirect_uri)
+                successful, message = self._result(result)
+                if not successful:
+                    self._authorizing = False
+                    self.on_account(False, _friendly_login_error(message))
+                    return
+                self._exchange_authorization_code(
+                    code_text, verifier_text, redirect_text
+                )
+
+            self.lib.Discord_Client_Authorize(
+                ctypes.byref(self.client),
+                ctypes.byref(args),
+                authorized,
+                None,
+                None,
+            )
             del scopes_buffer
         finally:
-            self.lib.Discord_DeviceAuthorizationArgs_Drop(ctypes.byref(args))
+            self.lib.Discord_AuthorizationArgs_Drop(ctypes.byref(args))
+            self.lib.Discord_AuthorizationCodeChallenge_Drop(
+                ctypes.byref(challenge)
+            )
+            self.lib.Discord_AuthorizationCodeVerifier_Drop(
+                ctypes.byref(verifier)
+            )
 
-    def _request_tokens(self, source: str, args: Opaque | None = None) -> None:
+    def _token_callback(self, source: str):
         @self._remember
         @self.TokenCallback
         def tokens_received(
@@ -389,40 +467,50 @@ class DiscordSocialClient:
             successful, message = self._result(result)
             if not successful:
                 self._authorizing = False
-                self.on_account(False, f"Discord {source} failed: {message}")
+                if source == "login":
+                    text = _friendly_login_error(message)
+                else:
+                    text = f"Discord {source} failed: {message}"
+                self.on_account(False, text)
                 return
             self._authorizing = False
-            self.lib.Discord_Client_CloseAuthorizeDeviceScreen(
-                ctypes.byref(self.client)
-            )
             self._access_token = access
             self._refresh_token = refresh
             self.on_tokens(access, refresh, int(expires_in))
             self._use_access_token(access)
 
-        if args is not None:
-            self.lib.Discord_Client_GetTokenFromDevice(
-                ctypes.byref(self.client),
-                ctypes.byref(args),
-                tokens_received,
-                None,
-                None,
-            )
-        else:
-            refresh, refresh_buffer = _input_string(self._refresh_token)
-            self.lib.Discord_Client_RefreshToken(
-                ctypes.byref(self.client),
-                APPLICATION_ID,
-                refresh,
-                tokens_received,
-                None,
-                None,
-            )
-            del refresh_buffer
+        return tokens_received
+
+    def _exchange_authorization_code(
+        self, code: str, verifier: str, redirect_uri: str
+    ) -> None:
+        code_value, code_buffer = _input_string(code)
+        verifier_value, verifier_buffer = _input_string(verifier)
+        redirect_value, redirect_buffer = _input_string(redirect_uri)
+        self.lib.Discord_Client_GetToken(
+            ctypes.byref(self.client),
+            APPLICATION_ID,
+            code_value,
+            verifier_value,
+            redirect_value,
+            self._token_callback("login"),
+            None,
+            None,
+        )
+        del code_buffer, verifier_buffer, redirect_buffer
 
     def refresh(self, refresh_token: str) -> None:
         self._refresh_token = refresh_token
-        self._request_tokens("session refresh")
+        refresh, refresh_buffer = _input_string(self._refresh_token)
+        self.lib.Discord_Client_RefreshToken(
+            ctypes.byref(self.client),
+            APPLICATION_ID,
+            refresh,
+            self._token_callback("session refresh"),
+            None,
+            None,
+        )
+        del refresh_buffer
 
     def restore(self, credentials: dict) -> None:
         self._access_token = str(credentials.get("access_token") or "")
