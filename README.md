@@ -24,7 +24,7 @@ from [Releases](https://github.com/itzlalpekhlua/ISpotify-Releases/releases).
 Linux users can run the compatibility-aware installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itzlalpekhlua/ISpotify/main/packaging/install-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/RubinLabs26/ISpotify/main/packaging/install-linux.sh | bash
 ```
 
 The installer checks the CPU architecture, Linux distribution, glibc version,
@@ -32,7 +32,7 @@ desktop integration tools, free disk space, and any existing iSpotify version
 before it changes the system. Run the checker by itself with:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itzlalpekhlua/ISpotify/main/packaging/install-linux.sh | bash -s -- --check
+curl -fsSL https://raw.githubusercontent.com/RubinLabs26/ISpotify/main/packaging/install-linux.sh | bash -s -- --check
 ```
 
 The standalone Linux executable targets x86-64 distributions with glibc 2.36
@@ -69,7 +69,7 @@ Python 3.10 or newer is required. FFmpeg from the system `PATH` is preferred;
 benefit from Deno 2.3 or newer for YouTube JavaScript challenges.
 
 ```bash
-git clone https://github.com/itzlalpekhlua/ISpotify.git
+git clone https://github.com/RubinLabs26/ISpotify.git
 cd ISpotify
 python -m venv .venv
 ```

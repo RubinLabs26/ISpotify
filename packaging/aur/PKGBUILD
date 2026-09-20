@@ -5,7 +5,7 @@ pkgver=18.0.0
 pkgrel=1
 pkgdesc='Desktop music search, playlist, download, and playback application'
 arch=('any')
-url='https://github.com/itzlalpekhlua/ISpotify'
+url='https://github.com/RubinLabs26/ISpotify'
 license=('MIT')
 depends=(
   'python'
