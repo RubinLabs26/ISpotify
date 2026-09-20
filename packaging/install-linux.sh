@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 
 REPOSITORY="itzlalpekhlua/ISpotify-Releases"
+REPOSITORY_URL="https://github.com/$REPOSITORY/releases/latest/download"
+PACKAGE_KEY_FINGERPRINT="FBF50CE755A06C567BFAE4D81C9D795EC0272267"
 APP_NAME="iSpotify"
 ASSET_NAME="ISpotify-linux-x86_64"
 ICON_NAME="ispotify-logo.png"
@@ -49,10 +51,13 @@ step() { printf '%s%s→%s %s\n' "$bold" "$violet" "$reset" "$1"; }
 
 usage() {
   cat <<EOF
-Usage: install.sh [option]
+Usage: install.sh [options]
 
   --check       Show compatibility and update status without changing anything
   --force       Reinstall even when the current version is installed
+  --repo        Add the signed APT or pacman repository and install from it
+  --standalone  Install the portable application for the current user
+  --yes         Accept the recommended repository option without prompting
   --uninstall   Remove iSpotify from the current user account
   --help        Show this help
 
@@ -112,6 +117,93 @@ ensure_aria2() {
     return 1
   fi
   install_aria2 "$manager"
+}
+
+choose_installation_method() {
+  local manager reply=""
+  manager="$(detect_package_manager || true)"
+
+  if [[ "$installation_method" == "repo" ]]; then
+    case "$manager" in
+      apt-get|pacman) printf 'repo'; return 0 ;;
+      *)
+        printf '%sThe signed repository is available for APT and pacman systems; %s was detected.%s\n' \
+          "$red" "${manager:-no package manager}" "$reset" >&2
+        return 1
+        ;;
+    esac
+  fi
+  [[ "$installation_method" == "standalone" ]] && { printf 'standalone'; return 0; }
+
+  case "$manager" in
+    apt-get|pacman)
+      if (( assume_yes )); then
+        printf 'repo'
+      elif [[ -r /dev/tty && -w /dev/tty ]]; then
+        printf '\n%sAdd the signed iSpotify repository for automatic updates? [Y/n] %s' "$bold" "$reset" >/dev/tty
+        IFS= read -r reply </dev/tty || true
+        case "$reply" in
+          n|N|no|NO|No) printf 'standalone' ;;
+          *) printf 'repo' ;;
+        esac
+      else
+        info "Install method" "no interactive terminal; using standalone mode" >&2
+        printf 'standalone'
+      fi
+      ;;
+    *)
+      info "Install method" "portable user installation for ${manager:-this system}" >&2
+      printf 'standalone'
+      ;;
+  esac
+}
+
+install_from_repository() {
+  local manager="$1" setup_dir apt_source pacman_source
+  if ! command -v curl >/dev/null 2>&1 && \
+     ! command -v wget >/dev/null 2>&1 && \
+     ! command -v aria2c >/dev/null 2>&1; then
+    ensure_aria2
+  fi
+  setup_dir="$(mktemp -d)"
+  trap 'rm -rf -- "$setup_dir"' EXIT
+
+  section "Signed package repository"
+  case "$manager" in
+    apt-get)
+      step "Downloading the Rubin Labs package signing key"
+      download "$REPOSITORY_URL/ispotify-archive-keyring.gpg" "$setup_dir/ispotify-archive-keyring.gpg"
+      run_as_root install -Dm644 "$setup_dir/ispotify-archive-keyring.gpg" \
+        /usr/share/keyrings/ispotify-archive-keyring.gpg
+      apt_source="$setup_dir/ispotify.list"
+      printf '%s\n' \
+        "deb [arch=amd64 signed-by=/usr/share/keyrings/ispotify-archive-keyring.gpg] $REPOSITORY_URL ./" \
+        >"$apt_source"
+      run_as_root install -Dm644 "$apt_source" /etc/apt/sources.list.d/ispotify.list
+      step "Refreshing APT and installing iSpotify"
+      run_as_root apt-get update
+      run_as_root apt-get install -y ispotify
+      ;;
+    pacman)
+      step "Downloading the Rubin Labs package signing key"
+      download "$REPOSITORY_URL/ispotify-archive-keyring.asc" "$setup_dir/ispotify-archive-keyring.asc"
+      run_as_root pacman-key --add "$setup_dir/ispotify-archive-keyring.asc"
+      run_as_root pacman-key --lsign-key "$PACKAGE_KEY_FINGERPRINT"
+      if ! grep -Eq '^[[:space:]]*\[ispotify\][[:space:]]*$' /etc/pacman.conf; then
+        pacman_source="$setup_dir/ispotify.conf"
+        printf '\n[ispotify]\nSigLevel = Required DatabaseOptional\nServer = %s\n' "$REPOSITORY_URL" >"$pacman_source"
+        run_as_root tee -a /etc/pacman.conf <"$pacman_source" >/dev/null
+      fi
+      step "Refreshing pacman and installing iSpotify"
+      run_as_root pacman -Syu --needed --noconfirm ispotify
+      ;;
+    *) return 1 ;;
+  esac
+
+  rm -rf -- "$setup_dir"
+  trap - EXIT
+  printf '\n%s%s✓ iSpotify is installed and will update through %s.%s\n' \
+    "$bold" "$green" "$manager" "$reset"
 }
 
 download() {
@@ -227,12 +319,19 @@ dependency_hint() {
 }
 
 installed_version() {
-  if [[ ! -x "$executable" ]]; then
-    printf 'not installed'
-  elif [[ -s "$version_file" ]]; then
+  local version=""
+  if command -v dpkg-query >/dev/null 2>&1 && \
+     version="$(dpkg-query -W -f='${Version}' ispotify 2>/dev/null)" && [[ -n "$version" ]]; then
+    printf '%s' "$version"
+  elif command -v pacman >/dev/null 2>&1 && \
+       version="$(pacman -Q ispotify 2>/dev/null | awk '{print $2}')" && [[ -n "$version" ]]; then
+    printf '%s' "${version%-*}"
+  elif [[ -x "$executable" && -s "$version_file" ]]; then
     tr -d '\r\n' <"$version_file"
-  else
+  elif [[ -x "$executable" ]]; then
     printf 'unknown (legacy installation)'
+  else
+    printf 'not installed'
   fi
 }
 
@@ -389,37 +488,56 @@ refresh_desktop() {
 }
 
 remove_installation() {
+  local pacman_config=""
   banner
-  step "Removing iSpotify from this user account"
+  step "Removing iSpotify and its package repository"
+  if command -v dpkg-query >/dev/null 2>&1 && dpkg-query -W ispotify >/dev/null 2>&1; then
+    run_as_root apt-get remove -y ispotify
+    run_as_root rm -f -- /etc/apt/sources.list.d/ispotify.list \
+      /usr/share/keyrings/ispotify-archive-keyring.gpg
+  elif command -v pacman >/dev/null 2>&1 && pacman -Q ispotify >/dev/null 2>&1; then
+    run_as_root pacman -Rns --noconfirm ispotify
+    if grep -Eq '^[[:space:]]*\[ispotify\][[:space:]]*$' /etc/pacman.conf; then
+      pacman_config="$(mktemp)"
+      awk '
+        BEGIN { skip = 0 }
+        /^[[:space:]]*\[ispotify\][[:space:]]*$/ { skip = 1; next }
+        skip && /^[[:space:]]*\[/ { skip = 0 }
+        !skip { print }
+      ' /etc/pacman.conf >"$pacman_config"
+      run_as_root install -m 644 "$pacman_config" /etc/pacman.conf
+      rm -f -- "$pacman_config"
+    fi
+  fi
   rm -f -- "$launcher" "$desktop_file" "$icon_file" "$executable" "$version_file"
   rmdir -- "$app_dir" 2>/dev/null || true
   refresh_desktop
   printf '%s%s✓ iSpotify was removed successfully.%s\n' "$bold" "$green" "$reset"
 }
 
-mode="install"; force_install=0
-case "${1:-}" in
-  "") ;;
-  --check) mode="check" ;;
-  --force) force_install=1 ;;
-  --uninstall) remove_installation; exit 0 ;;
-  --help|-h) usage; exit 0 ;;
-  *) printf 'Unknown option: %s\n\n' "$1"; usage; exit 2 ;;
-esac
+mode="install"; force_install=0; installation_method="auto"; assume_yes=0
+while (( $# > 0 )); do
+  case "$1" in
+    --check) mode="check" ;;
+    --force) force_install=1 ;;
+    --repo) installation_method="repo" ;;
+    --standalone) installation_method="standalone" ;;
+    --yes|-y) assume_yes=1 ;;
+    --uninstall) mode="uninstall" ;;
+    --help|-h) usage; exit 0 ;;
+    *) printf 'Unknown option: %s\n\n' "$1"; usage; exit 2 ;;
+  esac
+  shift
+done
+
+if [[ "$mode" == "uninstall" ]]; then
+  remove_installation
+  exit 0
+fi
 
 banner
 system_summary
 compatibility_checks
-
-if [[ "$mode" == "install" ]] && \
-   ! command -v aria2c >/dev/null 2>&1 && \
-   ! command -v curl >/dev/null 2>&1 && \
-   ! command -v wget >/dev/null 2>&1; then
-  ensure_aria2 || {
-    printf '\n%sUnable to install aria2 automatically. Install it manually and run this installer again.%s\n' "$red" "$reset"
-    exit 1
-  }
-fi
 
 current_version="$(installed_version)"
 requested_version="${ISPOTIFY_VERSION:-latest}"
@@ -435,6 +553,13 @@ show_verdict || exit 1
 
 if [[ "$mode" == "check" ]]; then
   printf '\n%sNo changes were made.%s\n' "$dim" "$reset"
+  exit 0
+fi
+
+selected_method="$(choose_installation_method)" || exit 1
+if [[ "$selected_method" == "repo" ]]; then
+  detected_manager="$(detect_package_manager)"
+  install_from_repository "$detected_manager"
   exit 0
 fi
 
