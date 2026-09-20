@@ -54,14 +54,21 @@ fallback. Deno or Node.js is recommended for YouTube JavaScript challenges.
 Cookies and downloaded audio stay in the operating system's user-data
 directory. Treat exported cookies as private session credentials.
 
-Discord Rich Presence connects only to the Discord desktop app already signed
-in on the computer. Configure a public Discord Application ID in Settings; bot
-tokens and account passwords are never requested or stored.
+Discord Rich Presence can use the Discord desktop app already signed in on the
+computer. Browser-based Discord users can instead choose **Connect Discord
+account** in Settings and authorize iSpotify through Discord's official login
+screen. Turn on **Show listening activity** to publish the current track.
 
-To configure it, create a Discord Developer application named `iSpotify`, copy
-its public Application ID into Settings, open the Discord desktop app, and turn
-on **Show listening activity**. Creating a bot or sharing a bot token is not
-required.
+OAuth credentials are stored in the operating system's credential vault when
+one is available. iSpotify never requests or stores a Discord password, bot
+token, or raw user token. The bundled Discord Social SDK runtime is version
+1.10.19337; its third-party notices are included with every package.
+
+Discord licenses its Social SDK runtime for distribution only when integrated
+into an application, so the raw proprietary library is intentionally absent
+from this public source repository. Official release packages include it.
+Source checkouts continue to run without the library, with Discord account
+login unavailable until an authorized SDK runtime is supplied locally.
 
 ## Contributing
 

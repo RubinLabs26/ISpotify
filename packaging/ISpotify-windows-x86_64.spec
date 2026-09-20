@@ -3,9 +3,20 @@
 a = Analysis(
     ["../main.py"],
     pathex=[".."],
-    binaries=[],
-    datas=[("../assets", "assets")],
-    hiddenimports=["PySide6.QtSvg"],
+    binaries=[
+        (
+            "../vendor/discord_social_sdk/windows-x86_64/discord_partner_sdk.dll",
+            "discord_social_sdk",
+        )
+    ],
+    datas=[
+        ("../assets", "assets"),
+        (
+            "../vendor/discord_social_sdk/License-Notices.txt",
+            "discord_social_sdk",
+        ),
+    ],
+    hiddenimports=["PySide6.QtSvg", "keyring.backends.Windows"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

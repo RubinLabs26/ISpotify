@@ -1,8 +1,7 @@
-"""Discord Rich Presence over the locally signed-in desktop client."""
+"""Discord listening activity with optional browser-based account login."""
 
 from __future__ import annotations
 
-import os
 import queue
 import threading
 import time
@@ -10,17 +9,16 @@ from typing import Any
 
 from PySide6.QtCore import QObject, Signal
 
-try:
-    from pypresence import ActivityType, Presence
-    LISTENING_ACTIVITY = ActivityType.LISTENING
-except ImportError:  # Keeps source checkouts usable until dependencies install.
-    Presence = None
-    LISTENING_ACTIVITY = 2
+from core.discord_social_sdk import (
+    APPLICATION_ID,
+    DiscordSdkError,
+    DiscordSocialClient,
+    TokenStore,
+)
 
 
-DEFAULT_APPLICATION_ID = os.environ.get(
-    "ISPOTIFY_DISCORD_APPLICATION_ID", ""
-).strip()
+DEFAULT_APPLICATION_ID = str(APPLICATION_ID)
+LISTENING_ACTIVITY = 2
 
 
 def valid_application_id(value: str | None) -> bool:
@@ -44,18 +42,27 @@ def presence_payload(song: dict[str, Any], position_ms: int = 0) -> dict[str, An
 
 
 class DiscordPresence(QObject):
-    """Run Discord IPC away from Qt's UI thread and reconnect quietly."""
+    """Run Discord SDK authorization and presence outside Qt's UI thread."""
 
     statusChanged = Signal(bool, str)
+    accountChanged = Signal(bool, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._commands: queue.Queue[tuple[str, Any]] = queue.Queue()
         self._thread: threading.Thread | None = None
 
-    def configure(self, application_id: str, enabled: bool) -> None:
+    def configure(self, enabled: bool) -> None:
         self._ensure_thread()
-        self._commands.put(("configure", (application_id.strip(), enabled)))
+        self._commands.put(("configure", bool(enabled)))
+
+    def login(self) -> None:
+        self._ensure_thread()
+        self._commands.put(("login", None))
+
+    def logout(self) -> None:
+        self._ensure_thread()
+        self._commands.put(("logout", None))
 
     def show_song(self, song: dict[str, Any], position_ms: int = 0) -> None:
         self._ensure_thread()
@@ -70,7 +77,7 @@ class DiscordPresence(QObject):
         if thread is None:
             return
         self._commands.put(("stop", None))
-        thread.join(timeout=2)
+        thread.join(timeout=4)
         self._thread = None
 
     def _ensure_thread(self) -> None:
@@ -82,126 +89,99 @@ class DiscordPresence(QObject):
         self._thread.start()
 
     def _run(self) -> None:
-        rpc = None
-        application_id = ""
         enabled = False
         latest_activity = None
+        client: DiscordSocialClient | None = None
+        token_store = TokenStore()
+        credentials_loaded = False
 
-        def dispose_failed_connection(candidate) -> None:
-            """Close transports left behind when the Discord handshake fails."""
-            writer = getattr(candidate, "sock_writer", None)
-            loop = getattr(candidate, "loop", None)
-            if writer is not None:
-                try:
-                    writer.close()
-                    if (
-                        loop is not None
-                        and not loop.is_closed()
-                        and hasattr(writer, "wait_closed")
-                    ):
-                        loop.run_until_complete(writer.wait_closed())
-                except Exception:
-                    pass
-                # pypresence exposes the raw Windows pipe transport. Finish
-                # its deferred close before closing the private event loop.
-                if hasattr(writer, "_call_connection_lost"):
-                    try:
-                        writer._call_connection_lost(None)
-                    except Exception:
-                        sock = getattr(writer, "_sock", None)
-                        if sock is not None:
-                            try:
-                                sock.close()
-                            except Exception:
-                                pass
-                        writer._sock = None
-            if loop is not None and not loop.is_closed():
-                try:
-                    loop.close()
-                except Exception:
-                    pass
-
-        def disconnect() -> None:
-            nonlocal rpc
-            if rpc is None:
-                return
-            try:
-                rpc.clear()
-            except Exception:
-                pass
-            try:
-                rpc.close()
-            except Exception:
-                pass
-            rpc = None
-
-        def connect() -> bool:
-            nonlocal rpc
-            if not enabled or not valid_application_id(application_id):
-                return False
-            if Presence is None:
-                self.statusChanged.emit(False, "Discord support is not installed")
-                return False
-            if rpc is not None:
-                return True
-            candidate = None
-            try:
-                candidate = Presence(application_id)
-                candidate.connect()
-            except Exception:
-                if candidate is not None:
-                    dispose_failed_connection(candidate)
-                rpc = None
+        def tokens_received(access: str, refresh: str, expires_in: int) -> None:
+            if not token_store.save(access, refresh, expires_in):
                 self.statusChanged.emit(
-                    False, "Open and sign in to the Discord desktop app"
+                    False,
+                    "Connected for this session; credential storage is unavailable",
                 )
-                return False
-            rpc = candidate
-            self.statusChanged.emit(True, "Connected to Discord")
-            return True
+
+        def account_changed(connected: bool, text: str) -> None:
+            if not connected and "failed" in text.lower():
+                token_store.clear()
+            self.accountChanged.emit(connected, text)
+
+        def sdk_status(status: int, error: int) -> None:
+            if status == DiscordSocialClient.READY:
+                self.statusChanged.emit(True, "Connected to Discord")
+                if enabled and latest_activity is not None and client is not None:
+                    client.update_presence(latest_activity)
+            elif error:
+                self.statusChanged.emit(False, "Discord connection was interrupted")
+
+        def get_client() -> DiscordSocialClient | None:
+            nonlocal client, credentials_loaded
+            if client is not None:
+                return client
+            try:
+                client = DiscordSocialClient(
+                    sdk_status, tokens_received, account_changed
+                )
+            except (DiscordSdkError, OSError) as exc:
+                self.statusChanged.emit(False, str(exc))
+                return None
+            if not credentials_loaded:
+                credentials_loaded = True
+                credentials = token_store.load()
+                if credentials:
+                    self.accountChanged.emit(False, "Restoring Discord login…")
+                    client.restore(credentials)
+                else:
+                    self.accountChanged.emit(False, "Not connected")
+            return client
 
         while True:
             try:
-                command, value = self._commands.get(timeout=15)
+                command, value = self._commands.get(timeout=0.05)
             except queue.Empty:
-                if rpc is None and latest_activity is not None and connect():
-                    try:
-                        rpc.update(**latest_activity)
-                    except Exception:
-                        disconnect()
+                if client is not None:
+                    client.run_callbacks()
                 continue
 
             if command == "stop":
-                disconnect()
+                if client is not None:
+                    client.close()
                 return
             if command == "configure":
-                new_id, new_enabled = value
-                if new_id != application_id or not new_enabled:
-                    disconnect()
-                application_id = new_id
-                enabled = bool(new_enabled and valid_application_id(new_id))
-                if not enabled:
-                    latest_activity = None
-                    self.statusChanged.emit(False, "Discord activity is off")
+                enabled = bool(value)
+                if enabled:
+                    if get_client() is not None:
+                        self.statusChanged.emit(False, "Discord activity is ready")
                 else:
-                    connect()
-                continue
-            if command == "clear":
+                    latest_activity = None
+                    if client is not None:
+                        client.clear_presence()
+                    self.statusChanged.emit(False, "Discord activity is off")
+            elif command == "login":
+                sdk = get_client()
+                if sdk is not None:
+                    self.accountChanged.emit(False, "Waiting for Discord authorization…")
+                    sdk.login()
+                else:
+                    self.accountChanged.emit(False, "Discord login is unavailable")
+            elif command == "logout":
+                token_store.clear()
+                if client is not None:
+                    client.logout()
+                else:
+                    self.accountChanged.emit(False, "Not connected")
+            elif command == "clear":
                 latest_activity = None
-                if rpc is not None:
-                    try:
-                        rpc.clear()
-                    except Exception:
-                        disconnect()
-                continue
-            if command == "update":
+                if client is not None:
+                    client.clear_presence()
+            elif command == "update":
                 latest_activity = value
-                if connect():
-                    try:
-                        rpc.update(**latest_activity)
+                if enabled:
+                    sdk = get_client()
+                    if sdk is not None:
+                        sdk.update_presence(latest_activity)
                         self.statusChanged.emit(True, "Showing listening activity")
-                    except Exception:
-                        disconnect()
-                        self.statusChanged.emit(
-                            False, "Discord disconnected; reconnecting soon"
-                        )
+
+            if client is not None:
+                client.run_callbacks()

@@ -10,6 +10,7 @@ on:
       - "core/**"
       - "ui/**"
       - "assets/**"
+      - "vendor/discord_social_sdk/**"
       - "requirements.txt"
       - "packaging/apt/**"
       - "packaging/arch/PKGBUILD"
@@ -21,6 +22,7 @@ on:
       - "core/**"
       - "ui/**"
       - "assets/**"
+      - "vendor/discord_social_sdk/**"
       - "requirements.txt"
       - "packaging/apt/**"
       - "packaging/arch/PKGBUILD"
@@ -36,10 +38,17 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+      - name: Check out private Discord SDK runtime
+        uses: actions/checkout@v7
+        with:
+          repository: RubinLabs26/ISpotify-sdk
+          token: ${{ secrets.DISCORD_SDK_REPO_TOKEN }}
+          path: vendor/discord_social_sdk
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
@@ -50,11 +59,16 @@ jobs:
           sudo apt-get install -y libegl1 libgl1 libxkbcommon0
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller
+      - name: Verify Discord Social SDK
+        run: python -c "from core.discord_social_sdk import DiscordSocialClient; c=DiscordSocialClient(lambda *a: None, lambda *a: None, lambda *a: None); c.close(); print('Discord Social SDK loaded')"
       - name: Build executable
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed \
             --name ISpotify \
             --add-data "assets:assets" \
+            --add-data "vendor/discord_social_sdk/License-Notices.txt:discord_social_sdk" \
+            --add-binary "vendor/discord_social_sdk/linux-x86_64/libdiscord_partner_sdk.so:discord_social_sdk" \
+            --collect-submodules keyring.backends \
             --hidden-import PySide6.QtSvg \
             main.py
           install -Dm755 dist/ISpotify dist/release/ISpotify-linux-x86_64

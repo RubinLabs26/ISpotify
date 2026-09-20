@@ -42,7 +42,7 @@ class MainWindow(QMainWindow):
         self._build()
         self.discord_presence = DiscordPresence(self)
         self._connect()
-        self._configure_discord(*self.settings.discord_config())
+        self._configure_discord(self.settings.discord_config())
         self.navigate("home")
 
     def _build(self):
@@ -175,8 +175,13 @@ class MainWindow(QMainWindow):
         self.player.nextRequested.connect(self._play_next)
         self.settings.statusChanged.connect(self._on_settings_status)
         self.settings.discordChanged.connect(self._configure_discord)
+        self.settings.discordLoginRequested.connect(self.discord_presence.login)
+        self.settings.discordLogoutRequested.connect(self.discord_presence.logout)
         self.discord_presence.statusChanged.connect(
             self.settings.set_discord_status
+        )
+        self.discord_presence.accountChanged.connect(
+            self.settings.set_discord_account
         )
 
     def _on_settings_status(self, message: str):
@@ -276,15 +281,15 @@ class MainWindow(QMainWindow):
         self.library_page.mark_playing(song.get("video_id", ""))
         QTimer.singleShot(0, self._sync_discord_presence)
 
-    def _configure_discord(self, enabled: bool, application_id: str):
-        self.discord_presence.configure(application_id, enabled)
+    def _configure_discord(self, enabled: bool):
+        self.discord_presence.configure(enabled)
         if enabled:
             self._sync_discord_presence()
         else:
             self.discord_presence.clear()
 
     def _sync_discord_presence(self):
-        enabled, _application_id = self.settings.discord_config()
+        enabled = self.settings.discord_config()
         if (
             enabled
             and self.player.current_song
