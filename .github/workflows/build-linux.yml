@@ -39,8 +39,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -79,7 +79,7 @@ jobs:
           cd dist/release
           sha256sum ISpotify-linux-x86_64 > ISpotify-linux-x86_64.sha256
       - name: Upload Linux packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ISpotify-linux-${{ github.sha }}
           path: dist/release/*
@@ -96,8 +96,8 @@ jobs:
       group: publish-linux-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: ISpotify-linux-${{ github.sha }}
           path: release

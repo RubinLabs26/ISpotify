@@ -41,8 +41,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -79,7 +79,7 @@ jobs:
           Copy-Item dist/windows/ISpotify-windows-x86_64.exe* dist/release/
           Copy-Item dist/installer/ISpotify-Setup-x86_64.exe* dist/release/
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ISpotify-windows-${{ github.sha }}
           path: dist/release
@@ -96,8 +96,8 @@ jobs:
       group: publish-windows-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: ISpotify-windows-${{ github.sha }}
           path: release
