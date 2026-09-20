@@ -17,6 +17,7 @@ on:
       - "packaging/windows-version.txt"
       - "packaging/publish-github-release.sh"
       - ".github/workflows/build-windows.yml"
+      - ".github/workflows/build-linux.yml"
   pull_request:
     paths:
       - "main.py"
@@ -30,6 +31,7 @@ on:
       - "packaging/windows-version.txt"
       - "packaging/publish-github-release.sh"
       - ".github/workflows/build-windows.yml"
+      - ".github/workflows/build-linux.yml"
 
 concurrency:
   group: windows-build-${{ github.ref }}
