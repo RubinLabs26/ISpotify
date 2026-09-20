@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=iSpotify
+Comment=Personal music player by Rubin B.
+Exec=python3 /path/to/iSpotify-v15/main.py
+Icon=ishpoitfy
+Terminal=false
+Categories=AudioVideo;Audio;Player;

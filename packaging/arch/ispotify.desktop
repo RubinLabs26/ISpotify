@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=iSpotify
+Comment=Search, play, and download music
+Exec=/usr/bin/ispotify
+Icon=ispotify
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+StartupNotify=true

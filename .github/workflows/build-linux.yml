@@ -1,0 +1,48 @@
+name: Build Linux client
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "main.py"
+      - "core/**"
+      - "ui/**"
+      - "assets/**"
+      - "requirements.txt"
+      - ".github/workflows/build-linux.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+      - name: Build executable
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed \
+            --name ISpotify \
+            --add-data "assets:assets" \
+            --hidden-import PySide6.QtSvg \
+            main.py
+          chmod +x dist/ISpotify
+      - name: Upload Linux executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ISpotify-linux-x86_64
+          path: dist/ISpotify
+          if-no-files-found: error
+          retention-days: 30

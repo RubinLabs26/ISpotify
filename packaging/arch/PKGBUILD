@@ -1,0 +1,31 @@
+pkgname=ispotify
+pkgver=17.0.0
+pkgrel=1
+pkgdesc='Desktop music search, playback, and download application'
+arch=('x86_64')
+url='https://github.com/itzlalpekhlua/ISpotify-Releases'
+license=('MIT')
+depends=('glibc>=2.36' 'libglvnd' 'libxkbcommon' 'fontconfig' 'libx11' 'libxcb' 'xcb-util-cursor' 'libpulse' 'dbus')
+optdepends=('deno: YouTube JavaScript challenge support' 'nodejs: alternative JavaScript runtime' 'pipewire-pulse: PipeWire audio playback' 'pulseaudio: PulseAudio playback')
+source=(
+  "ISpotify-linux-x86_64::https://github.com/itzlalpekhlua/ISpotify-Releases/releases/download/v${pkgver}/ISpotify-linux-x86_64"
+  "ispotify-logo.png::https://github.com/itzlalpekhlua/ISpotify-Releases/releases/download/v${pkgver}/ispotify-logo.png"
+  'ispotify.desktop'
+  'LICENSE'
+)
+sha256sums=(
+  '235395957fc66448e05d7b798536913b154904de27dd1421e1ecc606e4199c51'
+  'ba54d40452a6eedc7f8d4491caffe495620712532998028b80e97f9f410e3745'
+  'SKIP'
+  'afaf18171411ff094071be639aaa9c471c3242e76a11e77b56f1748eeedf1a01'
+)
+
+package() {
+  install -Dm755 "$srcdir/ISpotify-linux-x86_64" "$pkgdir/opt/ispotify/ISpotify"
+  printf '%s\n' "$pkgver" >"$pkgdir/opt/ispotify/version"
+  install -Dm644 "$srcdir/ispotify-logo.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/ispotify.png"
+  install -Dm644 "$srcdir/ispotify.desktop" "$pkgdir/usr/share/applications/ispotify.desktop"
+  install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/ispotify/LICENSE"
+  install -d "$pkgdir/usr/bin"
+  ln -s /opt/ispotify/ISpotify "$pkgdir/usr/bin/ispotify"
+}

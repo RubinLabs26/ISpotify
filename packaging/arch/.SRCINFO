@@ -1,0 +1,30 @@
+pkgbase = ispotify
+	pkgdesc = Desktop music search, playback, and download application
+	pkgver = 17.0.0
+	pkgrel = 1
+	url = https://github.com/itzlalpekhlua/ISpotify-Releases
+	arch = x86_64
+	license = MIT
+	depends = glibc>=2.36
+	depends = libglvnd
+	depends = libxkbcommon
+	depends = fontconfig
+	depends = libx11
+	depends = libxcb
+	depends = xcb-util-cursor
+	depends = libpulse
+	depends = dbus
+	optdepends = deno: YouTube JavaScript challenge support
+	optdepends = nodejs: alternative JavaScript runtime
+	optdepends = pipewire-pulse: PipeWire audio playback
+	optdepends = pulseaudio: PulseAudio playback
+	source = ISpotify-linux-x86_64::https://github.com/itzlalpekhlua/ISpotify-Releases/releases/download/v17.0.0/ISpotify-linux-x86_64
+	source = ispotify-logo.png::https://github.com/itzlalpekhlua/ISpotify-Releases/releases/download/v17.0.0/ispotify-logo.png
+	source = ispotify.desktop
+	source = LICENSE
+	sha256sums = 235395957fc66448e05d7b798536913b154904de27dd1421e1ecc606e4199c51
+	sha256sums = ba54d40452a6eedc7f8d4491caffe495620712532998028b80e97f9f410e3745
+	sha256sums = SKIP
+	sha256sums = afaf18171411ff094071be639aaa9c471c3242e76a11e77b56f1748eeedf1a01
+
+pkgname = ispotify
