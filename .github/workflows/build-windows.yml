@@ -60,7 +60,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller
       - name: Verify Discord Social SDK
-        run: python -c "from core.discord_social_sdk import DiscordSocialClient; c=DiscordSocialClient(lambda *a: None, lambda *a: None, lambda *a: None); c.close(); print('Discord Social SDK loaded')"
+        run: |
+          python -c "from core.discord_social_sdk import DiscordSocialClient; c=DiscordSocialClient(lambda *a: None, lambda *a: None, lambda *a: None); c.close(); print('Discord Social SDK loaded')"
       - name: Build portable executable
         run: pyinstaller --noconfirm --clean --distpath dist/windows packaging/ISpotify-windows-x86_64.spec
       - name: Build installer
