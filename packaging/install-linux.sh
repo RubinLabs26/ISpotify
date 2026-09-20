@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-REPOSITORY="itzlalpekhlua/ISpotify-Releases"
+REPOSITORY="RubinLabs26/ISpotify"
 REPOSITORY_URL="https://github.com/$REPOSITORY/releases/latest/download"
 PACKAGE_KEY_FINGERPRINT="FBF50CE755A06C567BFAE4D81C9D795EC0272267"
 APP_NAME="iSpotify"

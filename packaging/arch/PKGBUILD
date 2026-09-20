@@ -8,8 +8,8 @@ license=('MIT')
 depends=('glibc>=2.36' 'libglvnd' 'libxkbcommon' 'fontconfig' 'libx11' 'libxcb' 'xcb-util-cursor' 'libpulse' 'dbus')
 optdepends=('deno: YouTube JavaScript challenge support' 'nodejs: alternative JavaScript runtime' 'pipewire-pulse: PipeWire audio playback' 'pulseaudio: PulseAudio playback')
 source=(
-  "ISpotify-linux-x86_64::https://github.com/itzlalpekhlua/ISpotify-Releases/releases/download/v${pkgver}/ISpotify-linux-x86_64"
-  "ispotify-logo.png::https://github.com/itzlalpekhlua/ISpotify-Releases/releases/download/v${pkgver}/ispotify-logo.png"
+  "ISpotify-linux-x86_64::https://github.com/RubinLabs26/ISpotify/releases/download/v${pkgver}/ISpotify-linux-x86_64"
+  "ispotify-logo.png::https://github.com/RubinLabs26/ISpotify/releases/download/v${pkgver}/ispotify-logo.png"
   'ispotify.desktop'
   'LICENSE'
 )

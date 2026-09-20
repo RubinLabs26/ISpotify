@@ -8,7 +8,7 @@ telemetry.
 ## Install
 
 Download the Windows installer or portable app from
-[Releases](https://github.com/itzlalpekhlua/ISpotify-Releases/releases).
+[Releases](https://github.com/RubinLabs26/ISpotify/releases).
 
 On Linux, run the universal installer:
 
@@ -56,3 +56,6 @@ directory. Treat exported cookies as private session credentials.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 iSpotify is available under the [MIT License](LICENSE).
+
+GitHub Actions checks and builds Windows and Linux packages after relevant code
+changes. A `v*` tag publishes the matching packages to the organization release.

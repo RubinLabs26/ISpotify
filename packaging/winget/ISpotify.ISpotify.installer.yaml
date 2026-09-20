@@ -15,7 +15,7 @@ UpgradeBehavior: install
 ReleaseDate: 2026-09-20
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/itzlalpekhlua/ISpotify-Releases/releases/download/v18.0.0/ISpotify-Setup-x86_64.exe
+    InstallerUrl: https://github.com/RubinLabs26/ISpotify/releases/download/v18.0.0/ISpotify-Setup-x86_64.exe
     InstallerSha256: 3459CFF109C9556E152BFA81E86F8E32C39C83ECF45CEEDF7927CADD22E7E1E2
     AppsAndFeaturesEntries:
       - DisplayName: iSpotify version 18.0.0
