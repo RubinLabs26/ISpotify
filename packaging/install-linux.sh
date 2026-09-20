@@ -61,7 +61,7 @@ Usage: install.sh [options]
   --uninstall   Remove iSpotify and its configured package repository
   --help        Show this help
 
-Set ISPOTIFY_VERSION to install a specific release, for example 18.0.0.
+Set ISPOTIFY_VERSION to install a specific release, for example 19.0.0.
 Interrupted application downloads are resumed from ~/.cache/ispotify/downloads.
 EOF
 }
