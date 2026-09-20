@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QTimer, QUrl, Qt, Signal, QSize
 from PySide6.QtGui import QFontMetrics
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PySide6.QtMultimedia import QAudioOutput, QMediaDevices, QMediaPlayer
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget,
 )
@@ -11,11 +11,17 @@ from ui.widgets import (
     ArtworkLabel, artwork_pixmap, format_duration, icon_button,
     standard_icon,
 )
+from core.audio_devices import (
+    classify_audio_output,
+    headphones_were_disconnected,
+    output_kind_label,
+)
 
 
 class PlayerWidget(QWidget):
     trackChanged = Signal(object)
     playbackFailed = Signal(str)
+    headphonesDisconnected = Signal(str, bool)
     previousRequested = Signal()
     nextRequested = Signal()
 
@@ -27,8 +33,11 @@ class PlayerWidget(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.current_song = None
         self._load_token = 0
+        self._audio_device_id = None
+        self._audio_device_kind = None
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
+        self.media_devices = QMediaDevices(self)
         self.player.setAudioOutput(self.audio_output)
         self.audio_output.setVolume(0.7)
 
@@ -43,9 +52,12 @@ class PlayerWidget(QWidget):
         self.title_label.setObjectName("playerTitle")
         self.artist_label = QLabel("Pick something to play")
         self.artist_label.setObjectName("secondary")
+        self.output_label = QLabel("Detecting audio outputâ€¦")
+        self.output_label.setObjectName("outputDevice")
         info.addStretch()
         info.addWidget(self.title_label)
         info.addWidget(self.artist_label)
+        info.addWidget(self.output_label)
         info.addStretch()
         info_wrap = QWidget()
         info_wrap.setLayout(info)
@@ -95,6 +107,44 @@ class PlayerWidget(QWidget):
         self.player.durationChanged.connect(self._on_duration_changed)
         self.player.playbackStateChanged.connect(self._on_state_changed)
         self.player.errorOccurred.connect(self._on_player_error)
+        self.media_devices.audioOutputsChanged.connect(self._refresh_audio_device)
+        self._audio_device_timer = QTimer(self)
+        self._audio_device_timer.setInterval(1500)
+        self._audio_device_timer.timeout.connect(self._refresh_audio_device)
+        self._audio_device_timer.start()
+        self._refresh_audio_device()
+
+    def _refresh_audio_device(self):
+        """Follow the system default output and detect unplugged headphones."""
+        device = QMediaDevices.defaultAudioOutput()
+        name = device.description().strip()
+        device_id = bytes(device.id())
+        kind = classify_audio_output(name)
+
+        if device_id == self._audio_device_id and kind == self._audio_device_kind:
+            return
+
+        previous_kind = self._audio_device_kind
+        was_playing = self.player.playbackState() == QMediaPlayer.PlayingState
+        disconnected = headphones_were_disconnected(previous_kind, kind)
+        if disconnected and was_playing:
+            self.player.pause()
+
+        if device_id:
+            self.audio_output.setDevice(device)
+
+        self._audio_device_id = device_id
+        self._audio_device_kind = kind
+        if name:
+            label = f"{output_kind_label(kind)} Â· {name}"
+            self._elide(self.output_label, label, 168)
+            self.output_label.setToolTip(f"Current audio output: {name}")
+        else:
+            self.output_label.setText("No audio output")
+            self.output_label.setToolTip("No system audio output was detected")
+
+        if disconnected:
+            self.headphonesDisconnected.emit(name, was_playing)
 
     @staticmethod
     def _elide(label: QLabel, text: str, width: int) -> None:
@@ -152,6 +202,7 @@ class PlayerWidget(QWidget):
 
     def closeEvent(self, event):
         self._load_token += 1
+        self._audio_device_timer.stop()
         self.player.stop()
         self.player.setSource(QUrl())
         self.audio_output.setVolume(0)

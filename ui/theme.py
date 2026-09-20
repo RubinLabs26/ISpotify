@@ -143,6 +143,10 @@ def install_theme(app) -> None:
             font-size: 9.5pt;
             font-weight: 600;
         }}
+        QLabel#outputDevice {{
+            color: {COLORS["text_muted"]};
+            font-size: 7.5pt;
+        }}
         QLabel#heroArtwork {{
             border-radius: 16px;
         }}

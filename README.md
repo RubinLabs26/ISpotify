@@ -30,6 +30,7 @@ or newer.
 
 - Responsive song and playlist search
 - Queued MP3 downloads and offline playback
+- Live headphone detection with automatic pause when headphones disconnect
 - Local library and playlist management
 - Optional local YouTube cookies for sign-in checks
 - Polished PySide6 interface for Windows and Linux

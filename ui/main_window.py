@@ -161,6 +161,9 @@ class MainWindow(QMainWindow):
         self.downloader.downloadFailed.connect(self._on_download_failed)
         self.player.trackChanged.connect(self._on_track_changed)
         self.player.playbackFailed.connect(self._on_playback_failed)
+        self.player.headphonesDisconnected.connect(
+            self._on_headphones_disconnected
+        )
         self.player.previousRequested.connect(self._play_previous)
         self.player.nextRequested.connect(self._play_next)
         self.settings.statusChanged.connect(self._on_settings_status)
@@ -399,6 +402,17 @@ class MainWindow(QMainWindow):
             "Playback unavailable",
             "That audio file could not be played. Try another track.",
             "error",
+        )
+
+    def _on_headphones_disconnected(self, output_name: str, paused: bool):
+        if paused:
+            detail = "Playback was paused so audio does not switch to speakers."
+        elif output_name:
+            detail = f"Audio output changed to {output_name}."
+        else:
+            detail = "No audio output is currently available."
+        self.toast_manager.show_toast(
+            "Headphones disconnected", detail, "warning"
         )
 
     def closeEvent(self, event):
