@@ -166,7 +166,8 @@ install_from_repository() {
     ensure_aria2
   fi
   setup_dir="$(mktemp -d)"
-  trap 'rm -rf -- "$setup_dir"' EXIT
+  repository_setup_dir="$setup_dir"
+  trap '[[ -n "${repository_setup_dir:-}" ]] && rm -rf -- "$repository_setup_dir"' EXIT
 
   section "Signed package repository"
   case "$manager" in
@@ -187,6 +188,7 @@ install_from_repository() {
     pacman)
       step "Downloading the Rubin Labs package signing key"
       download "$REPOSITORY_URL/ispotify-archive-keyring.asc" "$setup_dir/ispotify-archive-keyring.asc"
+      run_as_root pacman-key --init
       run_as_root pacman-key --add "$setup_dir/ispotify-archive-keyring.asc"
       run_as_root pacman-key --lsign-key "$PACKAGE_KEY_FINGERPRINT"
       if ! grep -Eq '^[[:space:]]*\[ispotify\][[:space:]]*$' /etc/pacman.conf; then
@@ -201,6 +203,7 @@ install_from_repository() {
   esac
 
   rm -rf -- "$setup_dir"
+  repository_setup_dir=""
   trap - EXIT
   printf '\n%s%s✓ iSpotify is installed and will update through %s.%s\n' \
     "$bold" "$green" "$manager" "$reset"
