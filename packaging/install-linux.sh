@@ -54,7 +54,7 @@ Usage: install.sh [option]
   --uninstall   Remove iSpotify from the current user account
   --help        Show this help
 
-Set ISPOTIFY_VERSION to install a specific release, for example 17.0.0.
+Set ISPOTIFY_VERSION to install a specific release, for example 18.0.0.
 EOF
 }
 

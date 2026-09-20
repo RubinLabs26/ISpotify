@@ -14,11 +14,11 @@ VSVersionInfo(
       StringTable('040904B0', [
         StringStruct('CompanyName', 'iSpotify'),
         StringStruct('FileDescription', 'iSpotify desktop music player'),
-        StringStruct('FileVersion', '17.0.0'),
+        StringStruct('FileVersion', '18.0.0'),
         StringStruct('InternalName', 'ISpotify'),
         StringStruct('OriginalFilename', 'ISpotify-windows-x86_64.exe'),
         StringStruct('ProductName', 'iSpotify'),
-        StringStruct('ProductVersion', '17.0.0'),
+        StringStruct('ProductVersion', '18.0.0'),
       ])
     ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])]),

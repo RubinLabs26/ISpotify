@@ -10,7 +10,7 @@ body:
     id: version
     attributes:
       label: iSpotify version
-      placeholder: "17.0.0"
+      placeholder: "18.0.0"
     validations:
       required: true
   - type: input
