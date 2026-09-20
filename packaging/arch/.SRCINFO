@@ -2,7 +2,7 @@ pkgbase = ispotify
 	pkgdesc = Desktop music search, playback, and download application
 	pkgver = 18.0.0
 	pkgrel = 1
-	url = https://github.com/itzlalpekhlua/ISpotify-Releases
+	url = https://github.com/RubinLabs26/ISpotify
 	arch = x86_64
 	license = MIT
 	depends = glibc>=2.36

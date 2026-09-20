@@ -3,7 +3,7 @@ pkgver=18.0.0
 pkgrel=1
 pkgdesc='Desktop music search, playback, and download application'
 arch=('x86_64')
-url='https://github.com/itzlalpekhlua/ISpotify-Releases'
+url='https://github.com/RubinLabs26/ISpotify'
 license=('MIT')
 depends=('glibc>=2.36' 'libglvnd' 'libxkbcommon' 'fontconfig' 'libx11' 'libxcb' 'xcb-util-cursor' 'libpulse' 'dbus')
 optdepends=('deno: YouTube JavaScript challenge support' 'nodejs: alternative JavaScript runtime' 'pipewire-pulse: PipeWire audio playback' 'pulseaudio: PulseAudio playback')

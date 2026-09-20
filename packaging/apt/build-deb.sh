@@ -52,7 +52,7 @@ EOF
 cat >"$package_root/usr/share/doc/ispotify/copyright" <<'EOF'
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: iSpotify
-Source: https://github.com/itzlalpekhlua/ISpotify-Releases
+Source: https://github.com/RubinLabs26/ISpotify
 
 Files: *
 Copyright: 2026 ISpotify contributors
@@ -97,7 +97,7 @@ Installed-Size: $installed_size
 Maintainer: ISpotify Releases <packages@ispotify.invalid>
 Depends: libc6 (>= 2.36), libgl1, libegl1, libxkbcommon0, libfontconfig1, libx11-6, libxcb1, libpulse0, dbus
 Recommends: pipewire-pulse | pulseaudio
-Homepage: https://github.com/itzlalpekhlua/ISpotify-Releases
+Homepage: https://github.com/RubinLabs26/ISpotify
 Description: Desktop music search, playback, and download application
  iSpotify provides music search, playback, playlists, library management, and
  local audio downloads in a PySide6 desktop interface.
