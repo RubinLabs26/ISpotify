@@ -69,6 +69,46 @@ download() {
   fi
 }
 
+format_bytes() {
+  awk -v value="${1:-0}" 'BEGIN {
+    split("B KiB MiB GiB", units, " ")
+    unit = 1
+    while (value >= 1024 && unit < 4) {
+      value /= 1024
+      unit++
+    }
+    if (unit == 1) printf "%.0f %s", value, units[unit]
+    else printf "%.1f %s", value, units[unit]
+  }'
+}
+
+download_with_progress() {
+  local url="$1" destination="$2" stats="" size=0 elapsed=0 speed=0
+  local started=0 finished=0
+
+  printf '  %s%s%s\n' "$bold" "Downloading the iSpotify application…" "$reset"
+  if command -v curl >/dev/null 2>&1; then
+    stats="$(curl --fail --location --show-error \
+      --output "$destination" \
+      --write-out '%{size_download} %{time_total} %{speed_download}' \
+      "$url")" || return 1
+    read -r size elapsed speed <<<"$stats"
+  elif command -v wget >/dev/null 2>&1; then
+    started="$(date +%s)"
+    wget --progress=bar:force:noscroll "$url" --output-document="$destination" || return 1
+    finished="$(date +%s)"
+    size="$(wc -c <"$destination")"
+    elapsed=$((finished - started))
+    (( elapsed > 0 )) || elapsed=1
+    speed=$((size / elapsed))
+  else
+    return 1
+  fi
+
+  printf '  %s✓%s Downloaded %s in %.1f s — average %s/s\n' \
+    "$green" "$reset" "$(format_bytes "$size")" "$elapsed" "$(format_bytes "$speed")"
+}
+
 download_stdout() {
   local url="$1"
   if command -v curl >/dev/null 2>&1; then
@@ -325,7 +365,7 @@ trap 'rm -rf -- "$temporary_dir"' EXIT
 
 printf '\n'
 step "[1/5] Downloading iSpotify $latest_version"
-download "$release_base/$ASSET_NAME" "$temporary_dir/$ASSET_NAME"
+download_with_progress "$release_base/$ASSET_NAME" "$temporary_dir/$ASSET_NAME"
 download "$release_base/$ASSET_NAME.sha256" "$temporary_dir/$ASSET_NAME.sha256"
 download "$release_base/$ICON_NAME" "$temporary_dir/$ICON_NAME"
 
