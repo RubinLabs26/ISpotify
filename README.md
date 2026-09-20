@@ -55,7 +55,7 @@ sudo apt install ispotify
 curl -fsSL https://github.com/itzlalpekhlua/ISpotify-Releases/releases/latest/download/ispotify-archive-keyring.asc \
   -o /tmp/ispotify-archive-keyring.asc
 sudo pacman-key --add /tmp/ispotify-archive-keyring.asc
-sudo pacman-key --lsign-key 1D5A2FE0A948FA1944BB17B391C8400E2B908FE7
+sudo pacman-key --lsign-key FBF50CE755A06C567BFAE4D81C9D795EC0272267
 printf '\n[ispotify]\nSigLevel = Required DatabaseOptional\nServer = https://github.com/itzlalpekhlua/ISpotify-Releases/releases/latest/download\n' \
   | sudo tee -a /etc/pacman.conf
 sudo pacman -Syu ispotify
