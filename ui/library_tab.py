@@ -48,7 +48,7 @@ class LibrarySongCard(QFrame):
         available = bool(file_path and os.path.exists(file_path))
         self.status_dot = StatusDot(available, "Available offline", "File missing")
         layout.addWidget(self.status_dot)
-        play = icon_button("SP_MediaPlay", "Play", "playButton", size=13)
+        play = icon_button("SP_MediaPlay", "Play", "playButton", size=15)
         play.setEnabled(available)
         play.clicked.connect(lambda: self.playRequested.emit(self.song))
         remove = icon_button("SP_TrashIcon", "Remove from library", "destructiveButton")
@@ -90,7 +90,7 @@ class PlaylistTrackRow(QFrame):
         layout.addLayout(copy, 1)
         available = bool(song and os.path.exists(song.get("file_path", "")))
         layout.addWidget(StatusDot(available, "Downloaded", "Not downloaded"))
-        play = icon_button("SP_MediaPlay", "Play", "playButton", size=13)
+        play = icon_button("SP_MediaPlay", "Play", "playButton", size=15)
         play.setEnabled(available)
         if available:
             play.clicked.connect(lambda: self.playRequested.emit(song))

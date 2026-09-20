@@ -138,7 +138,7 @@ class MainWindow(QMainWindow):
             self._nav_buttons.append((key, button))
             layout.addWidget(button)
         layout.addStretch()
-        footer = QLabel("Built by Rubin B.")
+        footer = QLabel("© Rubin Labs")
         footer.setObjectName("muted")
         footer.setStyleSheet("font-size: 8pt; letter-spacing: 0.3px;")
         layout.addWidget(footer)

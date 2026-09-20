@@ -7,6 +7,8 @@ is not used to carry meaning on its own -- weight, spacing and opacity do
 most of the work, so the accent stays rare and therefore legible.
 """
 
+from pathlib import Path
+
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 
 
@@ -20,12 +22,15 @@ COLORS = {
     "border_bright": "rgba(255, 255, 255, 0.14)",
     "text": "#e9e9ea",
     "text_secondary": "#9c9c9f",
-    "text_muted": "#67676a",
+    "text_muted": "#7d7d81",  # 4.8:1 on the background (was 3.5:1)
     "accent": "#f2f1ec",
     "accent_press": "#cfcec7",
     "accent_text": "#101010",
     "accent_wash": "rgba(242, 241, 236, 0.10)",
     "accent_soft": "rgba(242, 241, 236, 0.22)",
+    "scroll": "rgba(255, 255, 255, 0.18)",
+    "scroll_hover": "rgba(255, 255, 255, 0.30)",
+    "scroll_press": "rgba(255, 255, 255, 0.42)",
     "danger": "#d99a95",
     "danger_wash": "rgba(217, 154, 149, 0.12)",
     "success": "#a7c9a8",
@@ -40,12 +45,15 @@ def install_theme(app) -> None:
         (
             family for family in (
                 "Inter", "Manrope", "Avenir Next",
-                "Plus Jakarta Sans", "Noto Sans", "DejaVu Sans",
+                "Plus Jakarta Sans", "Segoe UI", "Noto Sans", "DejaVu Sans",
             )
             if family in available_fonts
         ),
         "DejaVu Sans",
     )
+    check_icon = (
+        Path(__file__).resolve().parents[1] / "assets" / "icons" / "SP_Check.svg"
+    ).as_posix()
     palette = QPalette()
     palette.setColor(QPalette.Window, QColor(COLORS["background"]))
     palette.setColor(QPalette.WindowText, QColor(COLORS["text"]))
@@ -76,7 +84,7 @@ def install_theme(app) -> None:
             border: none;
         }}
         QToolTip {{
-            background: #201f22;
+            background: {COLORS["surface_hover"]};
             color: {COLORS["text"]};
             border: 1px solid {COLORS["border_bright"]};
             border-radius: 6px;
@@ -161,11 +169,12 @@ def install_theme(app) -> None:
             background: {COLORS["surface_raised"]};
         }}
         QFrame#hero {{
-            background: {COLORS["surface"]};
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 {COLORS["surface_raised"]}, stop:1 {COLORS["surface"]});
             border: 1px solid {COLORS["border"]};
             border-radius: 18px;
         }}
-        QFrame#player {{
+        QWidget#player {{
             background: {COLORS["surface"]};
             border-top: 1px solid {COLORS["border"]};
             border-radius: 0;
@@ -173,12 +182,12 @@ def install_theme(app) -> None:
         QFrame#downloadIntro {{
             background: {COLORS["surface"]};
             border: 1px solid {COLORS["border"]};
-            border-radius: 16px;
+            border-radius: 14px;
         }}
         QFrame#downloadCard {{
             background: {COLORS["surface_raised"]};
             border: 1px solid {COLORS["border_bright"]};
-            border-radius: 16px;
+            border-radius: 14px;
         }}
         QFrame#downloadQueue {{
             background: {COLORS["surface"]};
@@ -212,6 +221,10 @@ def install_theme(app) -> None:
         QFrame#songCard:hover, QFrame#resultCard:hover {{
             background: {COLORS["surface"]};
             border-color: {COLORS["border"]};
+        }}
+        QFrame#resultCard[selected="true"] {{
+            background: {COLORS["surface_raised"]};
+            border-color: {COLORS["border_bright"]};
         }}
         QFrame#songCard[playing="true"] {{
             background: {COLORS["accent_wash"]};
@@ -249,11 +262,11 @@ def install_theme(app) -> None:
             color: {COLORS["text_muted"]};
             background: transparent;
             border-color: transparent;
-            min-width: 34px;
-            max-width: 34px;
-            min-height: 34px;
-            max-height: 34px;
-            border-radius: 17px;
+            min-width: 36px;
+            max-width: 36px;
+            min-height: 36px;
+            max-height: 36px;
+            border-radius: 18px;
             padding: 0;
         }}
         QPushButton#destructiveButton:hover {{
@@ -272,6 +285,10 @@ def install_theme(app) -> None:
             font-weight: 600;
         }}
         QPushButton#accentButton:hover {{
+            background: #ffffff;
+            border-color: #ffffff;
+        }}
+        QPushButton#accentButton:focus {{
             background: #ffffff;
             border-color: #ffffff;
         }}
@@ -297,6 +314,14 @@ def install_theme(app) -> None:
             color: {COLORS["text"]};
             background: transparent;
         }}
+        QPushButton#ghostButton:pressed {{
+            color: {COLORS["text_secondary"]};
+            background: transparent;
+        }}
+        QPushButton#ghostButton:disabled {{
+            color: {COLORS["text_muted"]};
+            background: transparent;
+        }}
 
         /* ---------- buttons: icon-only ---------- */
         QPushButton#iconButton {{
@@ -316,6 +341,9 @@ def install_theme(app) -> None:
         QPushButton#iconButton:pressed {{
             background: {COLORS["surface_active"]};
         }}
+        QPushButton#iconButton:focus {{
+            border-color: {COLORS["border_bright"]};
+        }}
         QPushButton#iconButton:disabled {{
             background: transparent;
         }}
@@ -330,13 +358,17 @@ def install_theme(app) -> None:
             background: {COLORS["surface_raised"]};
             border: 1px solid {COLORS["border"]};
         }}
-        QPushButton#saveButton:hover {{
-            background: {COLORS["accent"]};
-            border-color: {COLORS["accent"]};
+        QPushButton#saveButton:hover, QPushButton#saveButton:focus {{
+            background: {COLORS["surface_hover"]};
+            border-color: {COLORS["text_muted"]};
         }}
         QPushButton#saveButton:pressed {{
-            background: {COLORS["accent_press"]};
-            border-color: {COLORS["accent_press"]};
+            background: {COLORS["surface_active"]};
+            border-color: {COLORS["text_muted"]};
+        }}
+        QPushButton#saveButton:disabled {{
+            background: transparent;
+            border-color: {COLORS["border"]};
         }}
 
         QPushButton#backButton {{
@@ -354,6 +386,9 @@ def install_theme(app) -> None:
             background: {COLORS["surface_hover"]};
             color: {COLORS["text"]};
         }}
+        QPushButton#backButton:pressed {{
+            background: {COLORS["surface_active"]};
+        }}
 
         QPushButton#playButton {{
             min-width: 42px;
@@ -369,9 +404,25 @@ def install_theme(app) -> None:
             background: #ffffff;
             border-color: #ffffff;
         }}
+        QPushButton#playButton:focus {{
+            background: #ffffff;
+            border-color: #ffffff;
+        }}
         QPushButton#playButton:pressed {{
             background: {COLORS["accent_press"]};
             border-color: {COLORS["accent_press"]};
+        }}
+        QPushButton#playButton:disabled {{
+            background: {COLORS["surface_raised"]};
+            border-color: {COLORS["border"]};
+        }}
+        QFrame#songCard QPushButton#playButton,
+        QFrame#card QPushButton#playButton {{
+            min-width: 36px;
+            max-width: 36px;
+            min-height: 36px;
+            max-height: 36px;
+            border-radius: 18px;
         }}
 
         QLabel#playingPill {{
@@ -390,7 +441,7 @@ def install_theme(app) -> None:
             border: 1px solid transparent;
             color: {COLORS["text_secondary"]};
             padding: 9px 12px;
-            border-radius: 9px;
+            border-radius: 10px;
             font-weight: 500;
             min-height: 22px;
         }}
@@ -400,6 +451,7 @@ def install_theme(app) -> None:
         }}
         QPushButton#navButton:checked {{
             background: {COLORS["surface_raised"]};
+            border-color: {COLORS["border"]};
             color: {COLORS["text"]};
             font-weight: 600;
         }}
@@ -438,12 +490,15 @@ def install_theme(app) -> None:
         QPushButton#chevronButton:hover {{
             background: {COLORS["surface_hover"]};
         }}
+        QPushButton#chevronButton:pressed {{
+            background: {COLORS["surface_active"]};
+        }}
 
         /* ---------- inputs ---------- */
         QLineEdit {{
             background: {COLORS["surface"]};
             border: 1px solid {COLORS["border"]};
-            border-radius: 11px;
+            border-radius: 10px;
             padding: 9px 13px;
             color: {COLORS["text"]};
             selection-background-color: {COLORS["accent_soft"]};
@@ -480,17 +535,23 @@ def install_theme(app) -> None:
             height: 16px;
         }}
         QCheckBox::indicator:unchecked {{
-            border: 1px solid {COLORS["border_bright"]};
-            border-radius: 8px;
+            border: 1px solid {COLORS["text_muted"]};
+            border-radius: 5px;
             background: transparent;
         }}
         QCheckBox::indicator:unchecked:hover {{
             border-color: {COLORS["text_secondary"]};
+            background: {COLORS["surface_hover"]};
         }}
         QCheckBox::indicator:checked {{
             border: 1px solid {COLORS["accent"]};
-            border-radius: 8px;
+            border-radius: 5px;
             background: {COLORS["accent"]};
+            image: url("{check_icon}");
+        }}
+        QCheckBox::indicator:checked:hover {{
+            border-color: #ffffff;
+            background: #ffffff;
         }}
 
         /* ---------- scroll & sliders ---------- */
@@ -500,15 +561,46 @@ def install_theme(app) -> None:
             margin: 4px 0;
         }}
         QScrollBar::handle:vertical {{
-            background: {COLORS["surface_active"]};
+            background: {COLORS["scroll"]};
             border-radius: 4px;
             min-height: 28px;
         }}
         QScrollBar::handle:vertical:hover {{
-            background: {COLORS["border_bright"]};
+            background: {COLORS["scroll_hover"]};
+        }}
+        QScrollBar::handle:vertical:pressed {{
+            background: {COLORS["scroll_press"]};
         }}
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
             height: 0;
+        }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+            background: transparent;
+        }}
+        QScrollBar:horizontal {{
+            background: transparent;
+            height: 8px;
+            margin: 0 4px;
+        }}
+        QScrollBar::handle:horizontal {{
+            background: {COLORS["scroll"]};
+            border-radius: 4px;
+            min-width: 28px;
+        }}
+        QScrollBar::handle:horizontal:hover {{
+            background: {COLORS["scroll_hover"]};
+        }}
+        QScrollBar::handle:horizontal:pressed {{
+            background: {COLORS["scroll_press"]};
+        }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+            width: 0;
+        }}
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+            background: transparent;
+        }}
+        QSlider:horizontal {{
+            min-height: 18px;
         }}
         QSlider::groove:horizontal {{
             height: 3px;
@@ -533,6 +625,13 @@ def install_theme(app) -> None:
             margin: -5px 0;
             border-radius: 6px;
         }}
+        QSlider::handle:horizontal:pressed {{
+            background: {COLORS["accent_press"]};
+            width: 13px;
+            height: 13px;
+            margin: -5px 0;
+            border-radius: 6px;
+        }}
         QProgressBar {{
             background: {COLORS["border"]};
             border: 0;
@@ -540,18 +639,22 @@ def install_theme(app) -> None:
             text-align: center;
             color: transparent;
             height: 6px;
+            min-height: 6px;
+            max-height: 6px;
         }}
         QProgressBar#downloadProgress {{
             background: {COLORS["surface_active"]};
             border: 0;
-            border-radius: 5px;
+            border-radius: 4px;
             text-align: center;
             color: transparent;
             height: 8px;
+            min-height: 8px;
+            max-height: 8px;
         }}
         QProgressBar#downloadProgress::chunk {{
             background: {COLORS["text"]};
-            border-radius: 5px;
+            border-radius: 4px;
         }}
         QProgressBar::chunk {{
             background: {COLORS["text"]};

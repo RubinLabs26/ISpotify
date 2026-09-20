@@ -40,14 +40,16 @@ class Toast(QFrame):
             }}"""
         )
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 14, 0)
+        # The accent bar floats inside the rounded frame rather than running
+        # edge to edge, where its square ends poked out of the corners.
+        layout.setContentsMargins(12, 12, 16, 12)
         layout.setSpacing(11)
         bar = QFrame()
         bar.setObjectName("toastBar")
         bar.setFixedWidth(3)
         layout.addWidget(bar)
         copy = QVBoxLayout()
-        copy.setContentsMargins(0, 11, 0, 11)
+        copy.setContentsMargins(0, 0, 0, 0)
         copy.setSpacing(2)
         title_label = QLabel(title)
         title_label.setObjectName("toastTitle")

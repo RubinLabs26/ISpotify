@@ -12,12 +12,16 @@ from PySide6.QtWidgets import QApplication
 from ui.main_window import MainWindow
 from ui.theme import install_theme
 
+APP_ORGANIZATION = "Rubin Labs"
+APP_COPYRIGHT = "© Rubin Labs"
+
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("iSpotify")
     app.setApplicationDisplayName("iSpotify")
-    app.setOrganizationName("ishpoitfy")
+    app.setOrganizationName(APP_ORGANIZATION)
+    app.setProperty("copyrightNotice", APP_COPYRIGHT)
     install_theme(app)
     window = MainWindow()
     window.show()

@@ -22,6 +22,9 @@ class PlayerWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.setObjectName("player")
+        # A plain QWidget subclass only paints its stylesheet background
+        # (surface fill + top divider) when this attribute is set.
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.current_song = None
         self._load_token = 0
         self.player = QMediaPlayer()
@@ -53,7 +56,7 @@ class PlayerWidget(QWidget):
         self.prev_btn.setEnabled(False)
         self.prev_btn.clicked.connect(self.previousRequested.emit)
         layout.addWidget(self.prev_btn)
-        self.play_btn = icon_button("SP_MediaPlay", "Play or pause", "playButton", size=16)
+        self.play_btn = icon_button("SP_MediaPlay", "Play or pause", "playButton", size=18)
         self.play_btn.clicked.connect(self._toggle_play)
         layout.addWidget(self.play_btn)
         self.next_btn = icon_button("SP_MediaSeekForward", "Next track", size=15)
@@ -63,15 +66,17 @@ class PlayerWidget(QWidget):
 
         self.time_label = QLabel("0:00")
         self.time_label.setObjectName("secondary")
-        self.time_label.setFixedWidth(30)
+        self.time_label.setFixedWidth(36)
+        self.time_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         layout.addWidget(self.time_label)
         self.position_slider = QSlider(Qt.Horizontal)
-        self.position_slider.setMinimumWidth(160)
+        self.position_slider.setMinimumWidth(132)
         self.position_slider.sliderMoved.connect(self.player.setPosition)
         layout.addWidget(self.position_slider, 1)
         self.duration_label = QLabel("0:00")
         self.duration_label.setObjectName("secondary")
-        self.duration_label.setFixedWidth(30)
+        self.duration_label.setFixedWidth(36)
+        self.duration_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(self.duration_label)
 
         layout.addSpacing(6)
@@ -81,7 +86,7 @@ class PlayerWidget(QWidget):
         self.volume_slider = QSlider(Qt.Horizontal)
         self.volume_slider.setMaximum(100)
         self.volume_slider.setValue(70)
-        self.volume_slider.setMaximumWidth(64)
+        self.volume_slider.setMaximumWidth(80)
         self.volume_slider.valueChanged.connect(
             lambda value: self.audio_output.setVolume(value / 100)
         )

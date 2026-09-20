@@ -121,7 +121,11 @@ class DownloadsTab(QWidget):
             return
         self._progress.setValue(value)
         self._percent.setText(f"{value}%")
-        self._status.setText(f"{value}% downloaded")
+        # The big percentage already shows the number; describe the phase.
+        # yt-dlp reports 100 when the download ends, then ffmpeg converts.
+        self._status.setText(
+            "Downloading audio…" if value < 100 else "Converting to MP3…"
+        )
 
     def finish(self, success: bool):
         if not self._card:

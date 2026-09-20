@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QLabel, QPushButton, QSizePolicy, QStyle,
 )
@@ -20,17 +20,44 @@ def format_duration(seconds: int | float | None) -> str:
 
 def standard_icon(name: str):
     """Return Ishpoitfy's modern line icon, with a Qt fallback."""
-    icon_path = Path(__file__).resolve().parents[1] / "assets" / "icons" / f"{name}.svg"
+    icon_dir = Path(__file__).resolve().parents[1] / "assets" / "icons"
+    icon_path = icon_dir / f"{name}.svg"
     if icon_path.exists():
-        return QIcon(str(icon_path))
+        icon = QIcon(str(icon_path))
+        # A glyph may ship its own disabled look (<name>_disabled.svg). Used
+        # where the normal glyph is dark-on-light, because Qt's automatic
+        # dimming would otherwise sink it into a dark disabled background.
+        disabled_path = icon_dir / f"{name}_disabled.svg"
+        if disabled_path.exists():
+            icon.addFile(str(disabled_path), QSize(), QIcon.Disabled)
+        return icon
     return QApplication.style().standardIcon(getattr(QStyle, name))
 
 
 def artwork_pixmap(title: str, size: QSize) -> QPixmap:
-    """Return the app's audio-only artwork icon, never a cover thumbnail."""
+    """Return the app's audio-only artwork, never a cover thumbnail.
 
-    icon_path = Path(__file__).resolve().parents[1] / "assets" / "icons" / "SP_AudioArtwork.svg"
-    return QIcon(str(icon_path)).pixmap(size)
+    A quiet note glyph centred on a transparent canvas of exactly ``size``.
+    The tile itself (fill, border, radius) is drawn by ArtworkLabel, so the
+    glyph keeps its true proportions in every tile shape instead of being
+    stretched to fit a 4:3 frame.
+    """
+
+    glyph_path = Path(__file__).resolve().parents[1] / "assets" / "icons" / "SP_AudioGlyph.svg"
+    side = max(14, round(min(size.width(), size.height()) * 0.44))
+    glyph = QIcon(str(glyph_path)).pixmap(QSize(side, side))
+    ratio = glyph.devicePixelRatio() or 1.0
+    canvas = QPixmap(round(size.width() * ratio), round(size.height() * ratio))
+    canvas.setDevicePixelRatio(ratio)
+    canvas.fill(Qt.transparent)
+    painter = QPainter(canvas)
+    painter.drawPixmap(
+        round((size.width() - glyph.width() / ratio) / 2),
+        round((size.height() - glyph.height() / ratio) / 2),
+        glyph,
+    )
+    painter.end()
+    return canvas
 
 
 class MotionButton(QPushButton):
@@ -43,6 +70,15 @@ class MotionButton(QPushButton):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.EnabledChange:
+            # A disabled control should not invite a click.
+            self.setCursor(
+                Qt.PointingHandCursor if self.isEnabled() else Qt.ArrowCursor
+            )
 
 
 def icon_button(icon_name: str, tooltip: str, object_name: str = "iconButton",
@@ -70,11 +106,12 @@ class ArtworkLabel(QLabel):
         self.artwork_size = size
         self.setFixedSize(size)
         self.setPixmap(artwork_pixmap(title, size))
-        self.setScaledContents(True)
+        self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet(
-            f"background-color: {COLORS['surface_raised']}; "
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+            "stop:0 #1d1d20, stop:1 #151517); "
             f"border: 1px solid {COLORS['border']}; "
-            "border-radius: 11px; padding: 2px;"
+            "border-radius: 9px; padding: 0px;"
         )
 
     def set_artwork(self, pixmap: QPixmap) -> None:
@@ -112,6 +149,10 @@ class EmptyState(QLabel):
         self.setObjectName("muted")
         self.setAlignment(Qt.AlignCenter)
         self.setWordWrap(True)
-        self.setText(f"<h2 style='color:{COLORS['text']};'>{title}</h2>"
-                     f"<p>{detail}</p>")
+        self.setText(
+            f"<p style='margin:0; font-size:12.5pt; font-weight:600; "
+            f"color:{COLORS['text']};'>{title}</p>"
+            f"<p style='margin:6px 0 0 0; font-size:9.5pt; "
+            f"line-height:135%; color:{COLORS['text_secondary']};'>{detail}</p>"
+        )
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)

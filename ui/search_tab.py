@@ -49,6 +49,9 @@ class SearchResultCard(QFrame):
 
     def _selection_changed(self, state):
         self.selected = bool(state)
+        self.setProperty("selected", self.selected)
+        self.style().unpolish(self)
+        self.style().polish(self)
         self.selectionChanged.emit(self.selected)
 
     def mouseDoubleClickEvent(self, event):
