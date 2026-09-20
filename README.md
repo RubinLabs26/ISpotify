@@ -59,4 +59,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 iSpotify is available under the [MIT License](LICENSE).
 
 GitHub Actions checks and builds Windows and Linux packages after relevant code
-changes. A `v*` tag publishes the matching packages to the organization release.
+changes. Every change on `main` updates the `continuous` prerelease, while a
+matching `v*` tag publishes a stable versioned release.

@@ -13,6 +13,7 @@ on:
       - "requirements.txt"
       - "packaging/apt/**"
       - "packaging/arch/PKGBUILD"
+      - "packaging/publish-github-release.sh"
       - ".github/workflows/build-linux.yml"
   pull_request:
     paths:
@@ -23,6 +24,7 @@ on:
       - "requirements.txt"
       - "packaging/apt/**"
       - "packaging/arch/PKGBUILD"
+      - "packaging/publish-github-release.sh"
       - ".github/workflows/build-linux.yml"
 
 concurrency:
@@ -85,15 +87,16 @@ jobs:
           retention-days: 30
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     concurrency:
-      group: publish-${{ github.ref }}
+      group: publish-linux-${{ github.ref }}
       cancel-in-progress: false
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: ISpotify-linux-${{ github.sha }}
@@ -101,7 +104,4 @@ jobs:
       - name: Publish Linux release assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
-            gh release create "$GITHUB_REF_NAME" --title "iSpotify ${GITHUB_REF_NAME#v}" --generate-notes
-          gh release upload "$GITHUB_REF_NAME" release/* --clobber
+        run: packaging/publish-github-release.sh release
