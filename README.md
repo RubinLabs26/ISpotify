@@ -38,6 +38,30 @@ curl -fsSL https://raw.githubusercontent.com/itzlalpekhlua/ISpotify/main/packagi
 The standalone Linux executable targets x86-64 distributions with glibc 2.36
 or newer, including current Debian, Ubuntu, Fedora, and Arch Linux releases.
 
+### Debian and Ubuntu APT repository
+
+```bash
+curl -fsSL https://github.com/itzlalpekhlua/ISpotify-Releases/releases/latest/download/ispotify-archive-keyring.gpg \
+  | sudo tee /usr/share/keyrings/ispotify-archive-keyring.gpg >/dev/null
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/ispotify-archive-keyring.gpg] https://github.com/itzlalpekhlua/ISpotify-Releases/releases/latest/download ./" \
+  | sudo tee /etc/apt/sources.list.d/ispotify.list
+sudo apt update
+sudo apt install ispotify
+```
+
+### Arch Linux repository
+
+```bash
+curl -fsSL https://github.com/itzlalpekhlua/ISpotify-Releases/releases/latest/download/ispotify-archive-keyring.asc \
+  -o /tmp/ispotify-archive-keyring.asc
+sudo pacman-key --add /tmp/ispotify-archive-keyring.asc
+sudo pacman-key --lsign-key 1D5A2FE0A948FA1944BB17B391C8400E2B908FE7
+printf '\n[ispotify]\nSigLevel = Required DatabaseOptional\nServer = https://github.com/itzlalpekhlua/ISpotify-Releases/releases/latest/download\n' \
+  | sudo tee -a /etc/pacman.conf
+sudo pacman -Syu ispotify
+rm /tmp/ispotify-archive-keyring.asc
+```
+
 ## Run from source
 
 Python 3.10 or newer is required. FFmpeg from the system `PATH` is preferred;
