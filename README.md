@@ -31,6 +31,7 @@ or newer.
 - Responsive song and playlist search
 - Queued MP3 downloads and offline playback
 - Live headphone detection with automatic pause when headphones disconnect
+- Optional Discord status showing Listening to iSpotify and the current track
 - Local library and playlist management
 - Optional local YouTube cookies for sign-in checks
 - Polished PySide6 interface for Windows and Linux
@@ -52,6 +53,15 @@ fallback. Deno or Node.js is recommended for YouTube JavaScript challenges.
 
 Cookies and downloaded audio stay in the operating system's user-data
 directory. Treat exported cookies as private session credentials.
+
+Discord Rich Presence connects only to the Discord desktop app already signed
+in on the computer. Configure a public Discord Application ID in Settings; bot
+tokens and account passwords are never requested or stored.
+
+To configure it, create a Discord Developer application named `iSpotify`, copy
+its public Application ID into Settings, open the Discord desktop app, and turn
+on **Show listening activity**. Creating a bot or sharing a bot token is not
+required.
 
 ## Contributing
 

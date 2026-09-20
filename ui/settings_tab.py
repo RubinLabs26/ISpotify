@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import QObject, QSettings, QThread, Signal, Slot
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QSizePolicy, QTextEdit, QVBoxLayout, QWidget,
+    QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QScrollArea, QSizePolicy,
+    QTextEdit, QVBoxLayout, QWidget,
 )
 
 from core import cookies
+from core.discord_presence import DEFAULT_APPLICATION_ID, valid_application_id
 from ui.widgets import MotionButton, StatusDot
 
 COOKIE_PLACEHOLDER = "Paste your exported cookies here (JSON array, or a cookies.txt)…"
@@ -38,14 +40,72 @@ class CookieValidationWorker(QObject):
 
 class SettingsTab(QWidget):
     statusChanged = Signal(str)
+    discordChanged = Signal(bool, str)
 
     def __init__(self):
         super().__init__()
         self._validation_thread = None
         self._validation_worker = None
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 24)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setObjectName("settingsScroll")
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        root = QVBoxLayout(content)
+        root.setContentsMargins(0, 0, 8, 24)
         root.setSpacing(18)
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+
+        self._settings = QSettings("Rubin Labs", "iSpotify")
+        discord_card = QFrame()
+        discord_card.setObjectName("card")
+        discord_layout = QVBoxLayout(discord_card)
+        discord_layout.setContentsMargins(20, 16, 20, 16)
+        discord_layout.setSpacing(7)
+        discord_header = QHBoxLayout()
+        discord_title = QLabel("Discord Rich Presence")
+        discord_title.setObjectName("sectionTitle")
+        discord_header.addWidget(discord_title)
+        discord_header.addStretch()
+        self.discord_toggle = QCheckBox("Show listening activity")
+        discord_header.addWidget(self.discord_toggle)
+        discord_layout.addLayout(discord_header)
+        discord_detail = QLabel(
+            "Displays Listening to iSpotify and the current track through the "
+            "Discord desktop app. No password, OAuth token, or bot token is used."
+        )
+        discord_detail.setObjectName("secondary")
+        discord_detail.setWordWrap(True)
+        discord_layout.addWidget(discord_detail)
+        discord_config = QHBoxLayout()
+        discord_config.addWidget(QLabel("Application ID"))
+        self.discord_application_id = QLineEdit()
+        self.discord_application_id.setPlaceholderText("Public numeric Application ID")
+        saved_id = self._settings.value("discord/application_id", "", type=str)
+        self.discord_application_id.setText(DEFAULT_APPLICATION_ID or saved_id)
+        self.discord_application_id.setMaximumWidth(260)
+        self.discord_application_id.setToolTip(
+            "Use the public Application ID from Discord Developer Portal. Never paste a bot token."
+        )
+        discord_config.addWidget(self.discord_application_id)
+        self.discord_status = QLabel("Discord activity is off")
+        self.discord_status.setObjectName("muted")
+        discord_config.addWidget(self.discord_status, 1)
+        discord_layout.addLayout(discord_config)
+        root.addWidget(discord_card)
+
+        configured = valid_application_id(self.discord_application_id.text())
+        self.discord_toggle.setEnabled(configured)
+        self.discord_toggle.setChecked(
+            configured
+            and self._settings.value("discord/enabled", False, type=bool)
+        )
+        self.discord_application_id.textChanged.connect(self._on_discord_id_changed)
+        self.discord_application_id.editingFinished.connect(self._save_discord_settings)
+        self.discord_toggle.toggled.connect(self._save_discord_settings)
 
         intro = QFrame()
         intro.setObjectName("card")
@@ -132,6 +192,34 @@ class SettingsTab(QWidget):
         privacy.setStyleSheet("font-size: 8pt;")
         privacy.setWordWrap(True)
         root.addWidget(privacy)
+
+    def discord_config(self) -> tuple[bool, str]:
+        application_id = self.discord_application_id.text().strip()
+        return self.discord_toggle.isChecked(), application_id
+
+    def set_discord_status(self, connected: bool, text: str) -> None:
+        self.discord_status.setText(text)
+        self.discord_status.setStyleSheet(
+            "color: #9c9c9f;" if connected else "color: #7d7d81;"
+        )
+
+    def _on_discord_id_changed(self, text: str) -> None:
+        valid = valid_application_id(text)
+        self.discord_toggle.setEnabled(valid)
+        if not valid:
+            self.discord_toggle.setChecked(False)
+            self.discord_status.setText("Enter a valid Application ID")
+
+    def _save_discord_settings(self) -> None:
+        enabled, application_id = self.discord_config()
+        if not valid_application_id(application_id):
+            enabled = False
+        if not DEFAULT_APPLICATION_ID and valid_application_id(application_id):
+            self._settings.setValue("discord/application_id", application_id)
+        elif not DEFAULT_APPLICATION_ID:
+            self._settings.remove("discord/application_id")
+        self._settings.setValue("discord/enabled", enabled)
+        self.discordChanged.emit(enabled, application_id)
 
     def _refresh_status(self):
         configured = cookies.is_configured()

@@ -183,6 +183,11 @@ def install_theme(app) -> None:
             border-top: 1px solid {COLORS["border"]};
             border-radius: 0;
         }}
+        QScrollArea#settingsScroll,
+        QScrollArea#settingsScroll > QWidget > QWidget {{
+            background: transparent;
+            border: 0;
+        }}
         QFrame#downloadIntro {{
             background: {COLORS["surface"]};
             border: 1px solid {COLORS["border"]};

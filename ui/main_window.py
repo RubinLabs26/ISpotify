@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, QSize, Qt
+from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtWidgets import QGraphicsOpacityEffect
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QMainWindow, QStackedWidget,
@@ -10,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.downloader import Downloader
+from core.discord_presence import DiscordPresence
 from core.library import Library
 from ui.downloads_tab import DownloadsTab
 from ui.home_tab import HomeTab
@@ -38,7 +40,9 @@ class MainWindow(QMainWindow):
         self._current_page = None
         self._playlist_contexts = {}
         self._build()
+        self.discord_presence = DiscordPresence(self)
         self._connect()
+        self._configure_discord(*self.settings.discord_config())
         self.navigate("home")
 
     def _build(self):
@@ -161,12 +165,19 @@ class MainWindow(QMainWindow):
         self.downloader.downloadFailed.connect(self._on_download_failed)
         self.player.trackChanged.connect(self._on_track_changed)
         self.player.playbackFailed.connect(self._on_playback_failed)
+        self.player.player.playbackStateChanged.connect(
+            lambda _state: self._sync_discord_presence()
+        )
         self.player.headphonesDisconnected.connect(
             self._on_headphones_disconnected
         )
         self.player.previousRequested.connect(self._play_previous)
         self.player.nextRequested.connect(self._play_next)
         self.settings.statusChanged.connect(self._on_settings_status)
+        self.settings.discordChanged.connect(self._configure_discord)
+        self.discord_presence.statusChanged.connect(
+            self.settings.set_discord_status
+        )
 
     def _on_settings_status(self, message: str):
         kind, _, detail = message.partition("::")
@@ -181,7 +192,7 @@ class MainWindow(QMainWindow):
                  "search": (self.search, "Search", "Find something worth keeping."),
                  "library": (self.library_page, "Library", "Everything you chose to keep."),
                  "downloading": (self.downloads, "Downloads", "Audio moving into your collection."),
-                 "settings": (self.settings, "Settings", "Fix sign-in and bot-check errors.")}
+                 "settings": (self.settings, "Settings", "Connections and privacy controls.")}
         if page not in pages:
             return
         if (
@@ -263,6 +274,27 @@ class MainWindow(QMainWindow):
 
     def _on_track_changed(self, song):
         self.library_page.mark_playing(song.get("video_id", ""))
+        QTimer.singleShot(0, self._sync_discord_presence)
+
+    def _configure_discord(self, enabled: bool, application_id: str):
+        self.discord_presence.configure(application_id, enabled)
+        if enabled:
+            self._sync_discord_presence()
+        else:
+            self.discord_presence.clear()
+
+    def _sync_discord_presence(self):
+        enabled, _application_id = self.settings.discord_config()
+        if (
+            enabled
+            and self.player.current_song
+            and self.player.player.playbackState() == QMediaPlayer.PlayingState
+        ):
+            self.discord_presence.show_song(
+                self.player.current_song, self.player.player.position()
+            )
+        else:
+            self.discord_presence.clear()
 
     def _on_download_requested(self, result):
         self._enqueue_results([result])
@@ -417,6 +449,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         # Release the FFmpeg decoder before Qt tears down the application.
+        self.discord_presence.close()
         self.player.close()
         event.accept()
 
