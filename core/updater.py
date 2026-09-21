@@ -141,7 +141,11 @@ class UpdateManager(QObject):
             return
         version = str(self.release["tag_name"]).lstrip("v")
         folder = CACHE_DIR / "updates" / version
-        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.failed.emit(f"Could not save update: {exc}")
+            return
         self._download_path = folder / str(self.asset["name"])
         partial = self._download_path.with_name(self._download_path.name + ".part")
         self._expected_hash = str(self.asset["digest"]).split(":", 1)[1].lower()
@@ -167,7 +171,11 @@ class UpdateManager(QObject):
             return
         chunk = bytes(reply.readAll())
         if chunk:
-            self._download_file.write(chunk)
+            try:
+                self._download_file.write(chunk)
+            except OSError:
+                reply.abort()
+                return
             self._hash.update(chunk)
 
     def _finish_download(self, reply: QNetworkReply, partial: Path) -> None:

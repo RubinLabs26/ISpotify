@@ -288,8 +288,13 @@ class MainWindow(QMainWindow):
             else:
                 target = package if package.suffix == ".deb" else package.parent
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
+                guidance = (
+                    "Open it with your package manager."
+                    if package.suffix == ".deb"
+                    else "Replace your portable executable or use your package manager."
+                )
                 self.settings.set_update_status(
-                    f"Update downloaded to {package}. Install it with your package manager."
+                    f"Update downloaded to {package}. {guidance}"
                 )
         except OSError as exc:
             self._on_update_failed(f"Could not install update: {exc}")
