@@ -16,7 +16,7 @@ ReleaseDate: 2026-09-21
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/RubinLabs26/ISpotify/releases/download/v19.1.1/ISpotify-Setup-x86_64.exe
-    InstallerSha256: 872BB98B884E998A440DADC19E065E6B53988304F464607B660DA176E92011F9
+    InstallerSha256: A70249E9A4CE7BF2F16EB5ED62A1E824699EC76677F0D350719503C5B03C4D3B
     AppsAndFeaturesEntries:
       - DisplayName: iSpotify version 19.1.1
         Publisher: ISpotify
