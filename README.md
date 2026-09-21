@@ -7,6 +7,7 @@
 
 [![Latest release](https://img.shields.io/github/v/release/RubinLabs26/ISpotify?style=for-the-badge&labelColor=0d1117)](https://github.com/RubinLabs26/ISpotify/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/RubinLabs26/ISpotify/total?style=for-the-badge&labelColor=0d1117)](https://github.com/RubinLabs26/ISpotify/releases)
+[![GitHub stars](https://img.shields.io/github/stars/RubinLabs26/ISpotify?style=for-the-badge&labelColor=0d1117)](https://github.com/RubinLabs26/ISpotify/stargazers)
 [![License](https://img.shields.io/github/license/RubinLabs26/ISpotify?style=for-the-badge&labelColor=0d1117)](LICENSE)
 [![Checks](https://img.shields.io/github/actions/workflow/status/RubinLabs26/ISpotify/checks.yml?branch=main&style=for-the-badge&label=checks&labelColor=0d1117)](https://github.com/RubinLabs26/ISpotify/actions/workflows/checks.yml)
 
