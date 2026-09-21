@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlparse
 
 from core.discord_presence import (
     DEFAULT_APPLICATION_ID,
+    DOWNLOAD_URL,
     presence_payload,
     valid_application_id,
 )
@@ -53,12 +54,33 @@ class DiscordPresenceTests(unittest.TestCase):
     @patch("core.discord_presence.time.time", return_value=2_000)
     def test_builds_listening_activity_with_elapsed_time(self, _time):
         payload = presence_payload(
-            {"title": "A Song", "channel": "An Artist"}, 15_000
+            {
+                "video_id": "abcdefghijk",
+                "title": "A Song",
+                "channel": "An Artist",
+                "duration": 240,
+            },
+            15_000,
         )
         self.assertEqual(payload["activity_type"], 2)
         self.assertEqual(payload["details"], "A Song")
         self.assertEqual(payload["state"], "An Artist")
         self.assertEqual(payload["start"], 1_985)
+        self.assertEqual(payload["end"], 2_225)
+        self.assertEqual(
+            payload["large_image"],
+            "https://i.ytimg.com/vi/abcdefghijk/mqdefault.jpg",
+        )
+        self.assertEqual(
+            payload["url"], "https://www.youtube.com/watch?v=abcdefghijk"
+        )
+        self.assertEqual(payload["buttons"], [
+            {
+                "label": "Listen on YouTube",
+                "url": "https://www.youtube.com/watch?v=abcdefghijk",
+            },
+            {"label": "Get iSpotify", "url": DOWNLOAD_URL},
+        ])
 
     def test_limits_discord_text_fields(self):
         payload = presence_payload({"title": "x" * 200, "channel": "y" * 200})

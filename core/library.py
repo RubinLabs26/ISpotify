@@ -8,11 +8,19 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 import uuid
 from datetime import datetime, timezone
 
 from core.paths import LIBRARY_FILE, migrate_legacy_storage
+
+
+def _youtube_thumbnail(video_id: str) -> str:
+    clean_id = str(video_id or "").strip()
+    if re.fullmatch(r"[A-Za-z0-9_-]{6,20}", clean_id):
+        return f"https://i.ytimg.com/vi/{clean_id}/mqdefault.jpg"
+    return ""
 
 
 class Library:
@@ -40,6 +48,24 @@ class Library:
                 self._songs = []
             if not isinstance(self._playlists, list):
                 self._playlists = []
+            changed = False
+            for song in self._songs:
+                if isinstance(song, dict) and not song.get("thumbnail_url"):
+                    song["thumbnail_url"] = _youtube_thumbnail(
+                        song.get("video_id", "")
+                    )
+                    changed = changed or bool(song["thumbnail_url"])
+            for playlist in self._playlists:
+                if not isinstance(playlist, dict):
+                    continue
+                for track in playlist.get("tracks", []):
+                    if isinstance(track, dict) and not track.get("thumbnail_url"):
+                        track["thumbnail_url"] = _youtube_thumbnail(
+                            track.get("video_id", "")
+                        )
+                        changed = changed or bool(track["thumbnail_url"])
+            if changed:
+                self._save()
             self._prune_songs()
             self._prune_playlists()
         except (OSError, json.JSONDecodeError):
@@ -82,7 +108,7 @@ class Library:
         )
 
     def add_song(self, video_id: str, title: str, channel: str,
-                 thumbnail_url: str, file_path: str):
+                 thumbnail_url: str, file_path: str, duration: int = 0):
         if not file_path or not os.path.isfile(file_path):
             return
         if self.find(video_id):
@@ -91,8 +117,9 @@ class Library:
             "video_id": video_id,
             "title": title,
             "channel": channel,
-            "thumbnail_url": thumbnail_url,
+            "thumbnail_url": thumbnail_url or _youtube_thumbnail(video_id),
             "file_path": file_path,
+            "duration": max(0, int(duration or 0)),
             "added_at": datetime.now(timezone.utc).isoformat(),
             "last_played": None,
         })
@@ -179,7 +206,8 @@ class Library:
                 "video_id": video_id,
                 "title": value.get("title", "Unknown title"),
                 "channel": value.get("channel", channel),
-                "thumbnail_url": value.get("thumbnail_url", ""),
+                "thumbnail_url": value.get("thumbnail_url", "")
+                or _youtube_thumbnail(video_id),
                 "duration": value.get("duration", 0),
             })
 

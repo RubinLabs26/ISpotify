@@ -331,10 +331,31 @@ class DiscordSocialClient:
             pointer,
             ctypes.POINTER(ctypes.c_uint64),
         ]
+        lib.Discord_ActivityAssets_Init.argtypes = [pointer]
+        lib.Discord_ActivityAssets_Drop.argtypes = [pointer]
+        lib.Discord_ActivityAssets_SetLargeImage.argtypes = [
+            pointer, string_pointer,
+        ]
+        lib.Discord_ActivityAssets_SetLargeText.argtypes = [
+            pointer, string_pointer,
+        ]
+        lib.Discord_ActivityAssets_SetLargeUrl.argtypes = [
+            pointer, string_pointer,
+        ]
+        lib.Discord_Activity_SetAssets.argtypes = [pointer, pointer]
+        lib.Discord_ActivityButton_Init.argtypes = [pointer]
+        lib.Discord_ActivityButton_Drop.argtypes = [pointer]
+        lib.Discord_ActivityButton_SetLabel.argtypes = [pointer, DiscordString]
+        lib.Discord_ActivityButton_SetUrl.argtypes = [pointer, DiscordString]
+        lib.Discord_Activity_AddButton.argtypes = [pointer, pointer]
         lib.Discord_Activity_SetTimestamps.argtypes = [pointer, pointer]
         lib.Discord_ActivityTimestamps_Init.argtypes = [pointer]
         lib.Discord_ActivityTimestamps_Drop.argtypes = [pointer]
         lib.Discord_ActivityTimestamps_SetStart.argtypes = [
+            pointer,
+            ctypes.c_uint64,
+        ]
+        lib.Discord_ActivityTimestamps_SetEnd.argtypes = [
             pointer,
             ctypes.c_uint64,
         ]
@@ -612,6 +633,9 @@ class DiscordSocialClient:
     def update_presence(self, payload: dict) -> None:
         activity = Opaque()
         timestamps = Opaque()
+        assets = Opaque()
+        buttons: list[Opaque] = []
+        button_buffers: list[ctypes.Array] = []
         self.lib.Discord_Activity_Init(ctypes.byref(activity))
         try:
             name, name_buffer = _input_string("iSpotify")
@@ -631,11 +655,56 @@ class DiscordSocialClient:
             self.lib.Discord_Activity_SetApplicationId(
                 ctypes.byref(activity), ctypes.byref(application_id)
             )
+            if payload.get("large_image"):
+                self.lib.Discord_ActivityAssets_Init(ctypes.byref(assets))
+                large_image, large_image_buffer = _input_string(
+                    str(payload["large_image"])
+                )
+                large_text, large_text_buffer = _input_string(
+                    str(payload.get("large_text") or payload["details"])
+                )
+                self.lib.Discord_ActivityAssets_SetLargeImage(
+                    ctypes.byref(assets), ctypes.byref(large_image)
+                )
+                self.lib.Discord_ActivityAssets_SetLargeText(
+                    ctypes.byref(assets), ctypes.byref(large_text)
+                )
+                large_url_buffer = None
+                if payload.get("url"):
+                    large_url, large_url_buffer = _input_string(str(payload["url"]))
+                    self.lib.Discord_ActivityAssets_SetLargeUrl(
+                        ctypes.byref(assets), ctypes.byref(large_url)
+                    )
+                self.lib.Discord_Activity_SetAssets(
+                    ctypes.byref(activity), ctypes.byref(assets)
+                )
+            for value in payload.get("buttons", [])[:2]:
+                if not value.get("label") or not value.get("url"):
+                    continue
+                button = Opaque()
+                self.lib.Discord_ActivityButton_Init(ctypes.byref(button))
+                button_label, button_label_buffer = _input_string(str(value["label"]))
+                button_url, button_url_buffer = _input_string(str(value["url"]))
+                self.lib.Discord_ActivityButton_SetLabel(
+                    ctypes.byref(button), button_label
+                )
+                self.lib.Discord_ActivityButton_SetUrl(
+                    ctypes.byref(button), button_url
+                )
+                self.lib.Discord_Activity_AddButton(
+                    ctypes.byref(activity), ctypes.byref(button)
+                )
+                buttons.append(button)
+                button_buffers.extend((button_label_buffer, button_url_buffer))
             if payload.get("start"):
                 self.lib.Discord_ActivityTimestamps_Init(ctypes.byref(timestamps))
                 self.lib.Discord_ActivityTimestamps_SetStart(
                     ctypes.byref(timestamps), int(payload["start"])
                 )
+                if payload.get("end"):
+                    self.lib.Discord_ActivityTimestamps_SetEnd(
+                        ctypes.byref(timestamps), int(payload["end"])
+                    )
                 self.lib.Discord_Activity_SetTimestamps(
                     ctypes.byref(activity), ctypes.byref(timestamps)
                 )
@@ -649,6 +718,10 @@ class DiscordSocialClient:
             )
             del name_buffer, details_buffer, state_buffer
         finally:
+            for button in buttons:
+                self.lib.Discord_ActivityButton_Drop(ctypes.byref(button))
+            if assets.opaque:
+                self.lib.Discord_ActivityAssets_Drop(ctypes.byref(assets))
             if timestamps.opaque:
                 self.lib.Discord_ActivityTimestamps_Drop(ctypes.byref(timestamps))
             self.lib.Discord_Activity_Drop(ctypes.byref(activity))

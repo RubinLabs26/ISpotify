@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import queue
+import re
 import threading
 import time
 from typing import Any
@@ -19,6 +20,7 @@ from core.discord_social_sdk import (
 
 DEFAULT_APPLICATION_ID = str(APPLICATION_ID)
 LISTENING_ACTIVITY = 2
+DOWNLOAD_URL = "https://github.com/RubinLabs26/ISpotify/releases/latest"
 
 
 def valid_application_id(value: str | None) -> bool:
@@ -36,8 +38,26 @@ def presence_payload(song: dict[str, Any], position_ms: int = 0) -> dict[str, An
         "details": title or "Unknown track",
         "state": artist or "Unknown artist",
     }
-    if position_ms > 0:
-        payload["start"] = max(0, int(time.time() - position_ms / 1000))
+    video_id = str(song.get("video_id") or "").strip()
+    if re.fullmatch(r"[A-Za-z0-9_-]{6,20}", video_id):
+        watch_url = f"https://www.youtube.com/watch?v={video_id}"
+        payload["url"] = watch_url
+        payload["buttons"] = [
+            {"label": "Listen on YouTube", "url": watch_url},
+            {"label": "Get iSpotify", "url": DOWNLOAD_URL},
+        ]
+        thumbnail = str(song.get("thumbnail_url") or "").strip()
+        payload["large_image"] = (
+            thumbnail if thumbnail.startswith("https://") else
+            f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg"
+        )
+        payload["large_text"] = f"{title} — {artist}"[:128]
+    position_seconds = max(0, int(position_ms / 1000))
+    if position_seconds > 0:
+        payload["start"] = max(0, int(time.time()) - position_seconds)
+        duration = max(0, int(song.get("duration") or 0))
+        if duration > position_seconds:
+            payload["end"] = payload["start"] + duration
     return payload
 
 

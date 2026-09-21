@@ -30,7 +30,10 @@ class LibrarySongCard(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(10)
-        self.artwork = ArtworkLabel(song.get("title", "track"), QSize(64, 48))
+        self.artwork = ArtworkLabel(
+            song.get("title", "track"), QSize(64, 48),
+            song.get("thumbnail_url", ""),
+        )
         layout.addWidget(self.artwork)
         copy = QVBoxLayout()
         copy.setSpacing(2)
@@ -95,6 +98,11 @@ class PlaylistTrackRow(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 7, 10, 7)
         layout.setSpacing(7)
+        artwork = ArtworkLabel(
+            track.get("title", "track"), QSize(48, 36),
+            track.get("thumbnail_url", ""),
+        )
+        layout.addWidget(artwork)
         copy = QVBoxLayout()
         copy.setSpacing(1)
         title = QLabel(track.get("title", "Unknown title"))

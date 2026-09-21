@@ -21,6 +21,8 @@ Tags:
 ReleaseNotes: |-
   Adds colorful gradient covers to saved playlists, playlist search results, and playlist details.
   Playlist colors remain consistent across restarts and playlist renames.
+  Displays track thumbnails throughout search, library, playlists, home, and the player.
+  Adds cover art, playback timing, and Listen on YouTube/Get iSpotify buttons to Discord activity.
 ReleaseNotesUrl: https://github.com/RubinLabs26/ISpotify/releases/tag/v19.1.1
 ManifestType: defaultLocale
 ManifestVersion: 1.12.0

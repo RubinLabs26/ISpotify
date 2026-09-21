@@ -112,7 +112,9 @@ class HomeTab(QWidget):
         layout.setSpacing(9)
         artwork_row = QHBoxLayout()
         artwork_row.setContentsMargins(0, 0, 0, 0)
-        artwork = ArtworkLabel(song["title"], QSize(154, 112))
+        artwork = ArtworkLabel(
+            song["title"], QSize(154, 112), song.get("thumbnail_url", "")
+        )
         artwork_row.addWidget(artwork)
         layout.addLayout(artwork_row)
         text = QVBoxLayout()

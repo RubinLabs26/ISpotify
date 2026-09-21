@@ -34,7 +34,7 @@
 | | |
 |---|---|
 | **Search and discovery**<br>Search for songs and playlists, explore playlist tracks, and select multiple items for download. | **Playback**<br>Play local MP3 files with queue, previous/next, seek, volume, and automatic pause when headphones disconnect. |
-| **Downloads and library**<br>Queue MP3 downloads, create and rename playlists, edit song titles, move and reorder tracks, and listen offline. | **Privacy and integrations**<br>Use optional local YouTube cookies and optional Discord listening activity with credentials kept in the operating system vault. |
+| **Downloads and library**<br>Queue MP3 downloads, browse track artwork, create and rename playlists, edit song titles, move and reorder tracks, and listen offline. | **Privacy and integrations**<br>Use optional local YouTube cookies and Discord listening activity with cover art, playback time, and listening/download links. Credentials stay in the operating system vault. |
 | **Desktop experience**<br>Use a responsive PySide6 interface designed for Windows and Linux. | **Flexible installation**<br>Choose a Windows installer, portable executable, Debian package, Linux repository, or universal installer. |
 
 ## Download

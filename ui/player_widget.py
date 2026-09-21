@@ -7,10 +7,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget,
 )
 
-from ui.widgets import (
-    ArtworkLabel, artwork_pixmap, format_duration, icon_button,
-    standard_icon,
-)
+from ui.widgets import ArtworkLabel, format_duration, icon_button, standard_icon
 from core.audio_devices import (
     classify_audio_output,
     headphones_were_disconnected,
@@ -163,8 +160,8 @@ class PlayerWidget(QWidget):
         load_token = self._load_token
         self._elide(self.title_label, song.get("title", "Unknown title"), 168)
         self._elide(self.artist_label, song.get("channel", "Unknown artist"), 168)
-        self.artwork.set_artwork(artwork_pixmap(song.get("title", "iSpotify"),
-                                                self.artwork.artwork_size))
+        self.artwork.title = song.get("title", "iSpotify")
+        self.artwork.set_thumbnail(song.get("thumbnail_url", ""))
         # Explicitly release the previous FFmpeg decoder before replacing it.
         # Without this, rapidly switching between downloaded MP3s can leave
         # two decoders alive and crash some Qt FFmpeg builds on Linux.
@@ -186,9 +183,7 @@ class PlayerWidget(QWidget):
             168,
         )
         self.artwork.title = title
-        self.artwork.set_artwork(
-            artwork_pixmap(title, self.artwork.artwork_size)
-        )
+        self.artwork.set_thumbnail(self.current_song.get("thumbnail_url", ""))
 
     def _start_song(self, song: dict, load_token: int):
         if load_token != self._load_token:
