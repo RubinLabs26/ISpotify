@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import sys
 from collections import deque
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, QSize, Qt
+from PySide6.QtCore import QEasingCurve, QProcess, QPropertyAnimation, QTimer, QSize, Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtMultimedia import QMediaPlayer
-from PySide6.QtWidgets import QGraphicsOpacityEffect
+from PySide6.QtWidgets import QApplication, QGraphicsOpacityEffect, QMessageBox
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QMainWindow, QStackedWidget,
     QVBoxLayout, QWidget,
@@ -13,6 +15,12 @@ from PySide6.QtWidgets import (
 from core.downloader import Downloader
 from core.discord_presence import DiscordPresence
 from core.library import Library
+from core.update_install import (
+    install_linux_portable, install_mode, install_windows,
+    install_windows_portable,
+)
+from core.updater import RELEASE_PAGE, UpdateManager
+from core.version import APP_VERSION
 from ui.downloads_tab import DownloadsTab
 from ui.home_tab import HomeTab
 from ui.library_tab import LibraryTab
@@ -41,9 +49,20 @@ class MainWindow(QMainWindow):
         self._playlist_contexts = {}
         self._build()
         self.discord_presence = DiscordPresence(self)
+        self.updater = UpdateManager(self)
+        self._update_version = ""
+        self._package_install = None
+        self._discord_refresh_timer = QTimer(self)
+        self._discord_refresh_timer.setInterval(30_000)
+        self._discord_refresh_timer.timeout.connect(self._sync_discord_presence)
         self._connect()
         self._configure_discord(self.settings.discord_config())
         self.navigate("home")
+        QTimer.singleShot(3000, self.updater.check)
+        self._update_timer = QTimer(self)
+        self._update_timer.setInterval(6 * 60 * 60 * 1000)
+        self._update_timer.timeout.connect(self.updater.check)
+        self._update_timer.start()
 
     def _build(self):
         root = QWidget()
@@ -79,6 +98,11 @@ class MainWindow(QMainWindow):
         title_box.addWidget(self.page_subtitle)
         self.header.addLayout(title_box)
         self.header.addStretch()
+        self.update_button = MotionButton("Update available")
+        self.update_button.setObjectName("accentButton")
+        self.update_button.clicked.connect(lambda: self.navigate("settings"))
+        self.update_button.hide()
+        self.header.addWidget(self.update_button)
         page_layout.addLayout(self.header)
         self.pages = QStackedWidget()
         self._pages_opacity = QGraphicsOpacityEffect(self.pages)
@@ -168,7 +192,7 @@ class MainWindow(QMainWindow):
         self.player.trackChanged.connect(self._on_track_changed)
         self.player.playbackFailed.connect(self._on_playback_failed)
         self.player.player.playbackStateChanged.connect(
-            lambda _state: self._sync_discord_presence()
+            self._on_playback_state_changed
         )
         self.player.headphonesDisconnected.connect(
             self._on_headphones_disconnected
@@ -189,6 +213,114 @@ class MainWindow(QMainWindow):
         self.discord_presence.accountChanged.connect(
             self.settings.set_discord_account
         )
+        self.settings.updateCheckRequested.connect(self.updater.check)
+        self.settings.updateInstallRequested.connect(self._install_update)
+        self.updater.checkStarted.connect(
+            lambda: self.settings.set_update_status("Checking for updates…", checking=True)
+        )
+        self.updater.updateAvailable.connect(self._on_update_available)
+        self.updater.upToDate.connect(self._on_up_to_date)
+        self.updater.failed.connect(self._on_update_failed)
+        self.updater.downloadProgress.connect(self._on_update_progress)
+        self.updater.downloadReady.connect(self._on_update_ready)
+
+    def _on_update_available(self, version: str) -> None:
+        first_notice = self._update_version != version
+        self._update_version = version
+        self.update_button.show()
+        action = "Download and install" if self.updater.asset else "Open download page"
+        self.settings.update_install_button.setText(action)
+        self.settings.set_update_status(
+            f"v{version} is available. Installed: v{APP_VERSION}.", available=True
+        )
+        if first_notice:
+            self.toast_manager.show_toast(
+                "Update available", f"iSpotify v{version} is ready.", "info"
+            )
+
+    def _on_up_to_date(self) -> None:
+        self._update_version = ""
+        self.update_button.hide()
+        self.settings.set_update_status(f"You're up to date: v{APP_VERSION}.")
+
+    def _on_update_failed(self, message: str) -> None:
+        self.settings.set_update_status(message, available=bool(self._update_version))
+
+    def _on_update_progress(self, received: int, total: int) -> None:
+        if total > 0:
+            percent = min(100, max(0, round(received * 100 / total)))
+            self.settings.set_update_status(
+                f"Downloading v{self._update_version}: {percent}%",
+                checking=True,
+            )
+
+    def _install_update(self) -> None:
+        if not self.updater.asset:
+            QDesktopServices.openUrl(QUrl(RELEASE_PAGE))
+            return
+        self.settings.set_update_status(
+            f"Downloading v{self._update_version}…", checking=True
+        )
+        self.updater.download()
+
+    def _on_update_ready(self, path: str) -> None:
+        from pathlib import Path
+
+        package = Path(path)
+        mode = install_mode()
+        try:
+            if mode == "windows-installer":
+                self.settings.set_update_status("Installing update. iSpotify will close.")
+                install_windows(package)
+                QApplication.quit()
+            elif mode == "windows-portable":
+                self.settings.set_update_status("Installing update. iSpotify will close.")
+                install_windows_portable(package)
+                QApplication.quit()
+            elif mode == "linux-portable":
+                install_linux_portable(package)
+                self._ask_restart()
+            elif mode == "debian-package":
+                self.settings.set_update_status("Installing update…", checking=True)
+                self._package_install = QProcess(self)
+                self._package_install.finished.connect(self._on_package_installed)
+                self._package_install.start("pkexec", ["dpkg", "-i", str(package)])
+            else:
+                target = package if package.suffix == ".deb" else package.parent
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
+                guidance = (
+                    "Open it with your package manager."
+                    if package.suffix == ".deb"
+                    else "Replace your portable executable or use your package manager."
+                )
+                self.settings.set_update_status(
+                    f"Update downloaded to {package}. {guidance}"
+                )
+        except OSError as exc:
+            self._on_update_failed(f"Could not install update: {exc}")
+
+    def _on_package_installed(self, exit_code: int, _status) -> None:
+        if exit_code == 0:
+            self._ask_restart()
+        else:
+            self._on_update_failed(
+                "Package installation was cancelled or failed. Try your package manager."
+            )
+
+    def _ask_restart(self) -> None:
+        self.settings.set_update_status(
+            "Update installed. Restart iSpotify to use the new version."
+        )
+        answer = QMessageBox.question(
+            self,
+            "Update installed",
+            "iSpotify was updated successfully. Restart now to use the new version?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if answer == QMessageBox.Yes:
+            QProcess.startDetached(sys.executable, [])
+            QApplication.quit()
 
     def _on_settings_status(self, message: str):
         kind, _, detail = message.partition("::")
@@ -317,9 +449,18 @@ class MainWindow(QMainWindow):
     def _configure_discord(self, enabled: bool):
         self.discord_presence.configure(enabled)
         if enabled:
-            self._sync_discord_presence()
+            self._on_playback_state_changed(self.player.player.playbackState())
         else:
+            self._discord_refresh_timer.stop()
             self.discord_presence.clear()
+
+    def _on_playback_state_changed(self, state) -> None:
+        self._sync_discord_presence()
+        if state == QMediaPlayer.PlayingState and self.settings.discord_config():
+            self._discord_refresh_timer.start()
+            QTimer.singleShot(1500, self._sync_discord_presence)
+        else:
+            self._discord_refresh_timer.stop()
 
     def _sync_discord_presence(self):
         enabled = self.settings.discord_config()
@@ -328,8 +469,11 @@ class MainWindow(QMainWindow):
             and self.player.current_song
             and self.player.player.playbackState() == QMediaPlayer.PlayingState
         ):
+            song = dict(self.player.current_song)
+            if not song.get("duration") and self.player.player.duration() > 0:
+                song["duration"] = self.player.player.duration() // 1000
             self.discord_presence.show_song(
-                self.player.current_song, self.player.player.position()
+                song, self.player.player.position()
             )
         else:
             self.discord_presence.clear()

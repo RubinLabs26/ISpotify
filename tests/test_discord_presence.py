@@ -79,7 +79,7 @@ class DiscordPresenceTests(unittest.TestCase):
                 "label": "Listen on YouTube",
                 "url": "https://www.youtube.com/watch?v=abcdefghijk",
             },
-            {"label": "Get iSpotify", "url": DOWNLOAD_URL},
+            {"label": "Listen on iSpotify", "url": DOWNLOAD_URL},
         ])
 
     def test_limits_discord_text_fields(self):

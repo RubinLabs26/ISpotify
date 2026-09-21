@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import cookies
+from core.version import APP_VERSION
 from ui.widgets import MotionButton, StatusDot
 
 COOKIE_PLACEHOLDER = "Paste your exported cookies here (JSON array, or a cookies.txt)…"
@@ -44,6 +45,8 @@ class SettingsTab(QWidget):
     discordChanged = Signal(bool)
     discordLoginRequested = Signal()
     discordLogoutRequested = Signal()
+    updateCheckRequested = Signal()
+    updateInstallRequested = Signal()
 
     def __init__(self):
         super().__init__()
@@ -118,6 +121,32 @@ class SettingsTab(QWidget):
         self.discord_status.setObjectName("muted")
         discord_layout.addWidget(self.discord_status)
         root.addWidget(discord_card)
+
+        update_card = QFrame()
+        update_card.setObjectName("card")
+        update_layout = QVBoxLayout(update_card)
+        update_layout.setContentsMargins(20, 16, 20, 16)
+        update_layout.setSpacing(8)
+        update_title = QLabel("App updates")
+        update_title.setObjectName("sectionTitle")
+        update_layout.addWidget(update_title)
+        self.update_status = QLabel(f"Installed version: v{APP_VERSION}")
+        self.update_status.setObjectName("secondary")
+        self.update_status.setWordWrap(True)
+        update_layout.addWidget(self.update_status)
+        update_actions = QHBoxLayout()
+        update_actions.addStretch()
+        self.update_check_button = MotionButton("Check for updates")
+        self.update_check_button.setObjectName("ghostButton")
+        self.update_check_button.clicked.connect(self.updateCheckRequested.emit)
+        update_actions.addWidget(self.update_check_button)
+        self.update_install_button = MotionButton("Download and install")
+        self.update_install_button.setObjectName("accentButton")
+        self.update_install_button.clicked.connect(self.updateInstallRequested.emit)
+        self.update_install_button.hide()
+        update_actions.addWidget(self.update_install_button)
+        update_layout.addLayout(update_actions)
+        root.addWidget(update_card)
 
         self.discord_toggle.setChecked(
             self._settings.value("discord/enabled", False, type=bool)
@@ -214,6 +243,13 @@ class SettingsTab(QWidget):
 
     def discord_config(self) -> bool:
         return self.discord_toggle.isChecked()
+
+    def set_update_status(self, text: str, *, checking: bool = False,
+                          available: bool = False) -> None:
+        self.update_status.setText(text)
+        self.update_check_button.setEnabled(not checking)
+        self.update_install_button.setVisible(available)
+        self.update_install_button.setEnabled(available and not checking)
 
     def set_discord_status(self, connected: bool, text: str) -> None:
         self.discord_status.setText(text)

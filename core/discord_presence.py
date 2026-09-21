@@ -44,7 +44,7 @@ def presence_payload(song: dict[str, Any], position_ms: int = 0) -> dict[str, An
         payload["url"] = watch_url
         payload["buttons"] = [
             {"label": "Listen on YouTube", "url": watch_url},
-            {"label": "Get iSpotify", "url": DOWNLOAD_URL},
+            {"label": "Listen on iSpotify", "url": DOWNLOAD_URL},
         ]
         thumbnail = str(song.get("thumbnail_url") or "").strip()
         payload["large_image"] = (
