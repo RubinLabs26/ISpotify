@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-from collections import deque
 
 from PySide6.QtCore import QEasingCurve, QProcess, QPropertyAnimation, QTimer, QSize, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
@@ -12,7 +11,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-from core.downloader import Downloader
+from core.downloader import Downloader, discard_download_files
+from core.download_state import DownloadState, result_from_job
 from core.discord_presence import DiscordPresence
 from core.library import Library
 from core.update_install import (
@@ -39,15 +39,21 @@ class MainWindow(QMainWindow):
         self.resize(1100, 720)
         self.library = Library()
         self.downloader = Downloader()
-        self._download_queue = deque()
+        self.download_state = DownloadState()
         self._active_result = None
+        self._shutting_down = False
+        self._cancel_requested_ids = set()
         self._playback_songs = []
         self._playback_index = -1
         self._nav_buttons = []
         self._page_history = []
         self._current_page = None
-        self._playlist_contexts = {}
+        self._playlist_contexts = self.download_state.playlist_contexts()
+        for job in list(self.download_state.jobs):
+            if self.library.find(job["video_id"]):
+                self.download_state.remove(job["video_id"])
         self._build()
+        self.downloads.set_jobs(self.download_state.jobs)
         self.discord_presence = DiscordPresence(self)
         self.updater = UpdateManager(self)
         self._update_version = ""
@@ -63,6 +69,7 @@ class MainWindow(QMainWindow):
         self._update_timer.setInterval(6 * 60 * 60 * 1000)
         self._update_timer.timeout.connect(self.updater.check)
         self._update_timer.start()
+        QTimer.singleShot(0, self._start_next_download)
 
     def _build(self):
         root = QWidget()
@@ -189,6 +196,8 @@ class MainWindow(QMainWindow):
         self.downloader.progress.connect(self._on_download_progress)
         self.downloader.downloadFinished.connect(self._on_download_finished)
         self.downloader.downloadFailed.connect(self._on_download_failed)
+        self.downloader.downloadCancelled.connect(self._on_download_cancelled)
+        self.downloads.actionRequested.connect(self._on_download_action)
         self.player.trackChanged.connect(self._on_track_changed)
         self.player.playbackFailed.connect(self._on_playback_failed)
         self.player.player.playbackStateChanged.connect(
@@ -525,13 +534,9 @@ class MainWindow(QMainWindow):
             if self.library.find(result.video_id):
                 skipped += 1
                 continue
-            if (
-                self._active_result
-                and self._active_result.video_id == result.video_id
-            ) or any(item.video_id == result.video_id for item in self._download_queue):
+            if not self.download_state.enqueue(result):
                 skipped += 1
                 continue
-            self._download_queue.append(result)
             added.append(result)
 
         if not added:
@@ -543,10 +548,14 @@ class MainWindow(QMainWindow):
             return
 
         for result in added:
-            self.downloads.enqueue(result.title)
+            playlist_id = getattr(result, "playlist_id", None)
+            playlist = self._playlist_contexts.get(playlist_id)
+            if playlist:
+                self.download_state.remember_playlist(playlist)
+        self.downloads.set_jobs(self.download_state.jobs)
 
         if was_idle:
-            self._start_next_download()
+            self._start_next_download(navigate_to_downloads=True)
 
         if batch:
             detail = f"{len(added)} tracks added to the queue"
@@ -556,18 +565,22 @@ class MainWindow(QMainWindow):
         elif not was_idle:
             self.toast_manager.show_toast(
                 "Added to download queue",
-                f"{result.title} · {len(self._download_queue)} waiting",
+                f"{result.title} · {len(self.download_state.jobs)} waiting",
                 "info",
             )
 
-    def _start_next_download(self):
-        if not self._download_queue:
-            self._active_result = None
+    def _start_next_download(self, navigate_to_downloads: bool = False):
+        if self._active_result or self._shutting_down:
             return
-        self._active_result = self._download_queue.popleft()
+        job = self.download_state.next_queued()
+        if not job:
+            return
+        self.download_state.set_status(job["video_id"], "active")
+        self._active_result = result_from_job(job)
         result = self._active_result
-        self.downloads.start(result.title)
-        self.navigate("downloading")
+        self.downloads.set_jobs(self.download_state.jobs)
+        if navigate_to_downloads:
+            self.navigate("downloading")
         self.toast_manager.show_toast("Download started", result.title, "info")
         if not self.downloader.download(result.video_id, result.title):
             self.toast_manager.show_toast(
@@ -575,11 +588,19 @@ class MainWindow(QMainWindow):
                 "The download worker is still finishing its previous task.",
                 "error",
             )
-            self._download_queue.appendleft(result)
+            self.download_state.set_status(result.video_id, "queued")
             self._active_result = None
+            self.downloads.set_jobs(self.download_state.jobs)
 
     def _on_download_progress(self, value: int):
-        self.downloads.update_progress(value)
+        if self._active_result:
+            video_id = self._active_result.video_id
+            self.download_state.set_progress(video_id, value)
+            job = self.download_state.get(video_id)
+            if job and job["status"] == "active":
+                self.downloads.update_progress(video_id, value)
+            elif job and video_id in self.downloads.rows:
+                self.downloads.rows[video_id].update_job(job)
 
     def _on_download_finished(self, file_path: str):
         result = self._active_result
@@ -590,9 +611,10 @@ class MainWindow(QMainWindow):
                 result.thumbnail_url, file_path, result.duration,
             )
             self._update_downloaded_playlist(result)
+            self.download_state.remove(result.video_id)
         self.library_page.refresh()
         self.home.refresh()
-        self.downloads.finish(True)
+        self.downloads.set_jobs(self.download_state.jobs)
         self.toast_manager.show_toast(
             "Download complete",
             f"{result.title if result else 'track'} added to your library.",
@@ -603,13 +625,57 @@ class MainWindow(QMainWindow):
     def _on_download_failed(self, message: str):
         result = self._active_result
         self._active_result = None
-        self.downloads.finish(False)
+        if result:
+            self.download_state.set_status(result.video_id, "failed", message)
+        self.downloads.set_jobs(self.download_state.jobs)
         self.toast_manager.show_toast(
             "Download failed",
             f"{result.title if result else 'track'} · {message or 'check your connection and try again.'}",
             "error",
         )
         QTimer.singleShot(0, self._start_next_download)
+
+    def _on_download_cancelled(self):
+        result = self._active_result
+        self._active_result = None
+        if result and result.video_id in self._cancel_requested_ids:
+            discard_download_files(result.video_id)
+            self._cancel_requested_ids.discard(result.video_id)
+        if result and not self._shutting_down:
+            self.download_state.remove(result.video_id)
+            self.downloads.set_jobs(self.download_state.jobs)
+            QTimer.singleShot(0, self._start_next_download)
+
+    def _on_download_action(self, action: str, video_id: str) -> None:
+        job = self.download_state.get(video_id)
+        if not job:
+            return
+        active = bool(
+            self._active_result and self._active_result.video_id == video_id
+        )
+        if action == "pause" and job["status"] in ("active", "queued"):
+            self.download_state.set_status(video_id, "paused")
+            if active:
+                self.downloader.pause()
+        elif action == "resume" and job["status"] == "paused":
+            if active:
+                self.download_state.set_status(video_id, "active")
+                self.downloader.resume()
+            else:
+                self.download_state.set_status(video_id, "queued")
+                QTimer.singleShot(0, self._start_next_download)
+        elif action == "retry" and job["status"] == "failed":
+            self.download_state.set_status(video_id, "queued")
+            QTimer.singleShot(0, self._start_next_download)
+        elif action == "cancel":
+            self.download_state.remove(video_id)
+            if active:
+                self._cancel_requested_ids.add(video_id)
+                self.downloader.cancel()
+            else:
+                discard_download_files(video_id)
+                QTimer.singleShot(0, self._start_next_download)
+        self.downloads.set_jobs(self.download_state.jobs)
 
     def _on_playback_failed(self, message: str):
         self.toast_manager.show_toast(
@@ -631,6 +697,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         # Release the FFmpeg decoder before Qt tears down the application.
+        self._shutting_down = True
+        self.downloader.cancel()
         self.discord_presence.close()
         self.player.close()
         event.accept()

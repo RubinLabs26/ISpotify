@@ -5,11 +5,25 @@ from racing QThread deletion while the next queued item is starting.
 """
 
 import shutil
+import threading
+import re
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
 from core.cookies import ydl_cookie_kwargs, ydl_youtube_compat_kwargs
 from core.paths import DOWNLOAD_DIR, ensure_directories
+
+
+def discard_download_files(video_id: str) -> None:
+    """Remove files owned by a cancelled job from the app download folder."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{6,20}", video_id):
+        return
+    for path in DOWNLOAD_DIR.glob(f"{video_id}.*"):
+        if path.is_file():
+            try:
+                path.unlink()
+            except OSError:
+                pass
 
 
 class _QuietYdlLogger:
@@ -42,6 +56,11 @@ class DownloadSignals(QObject):
     progress = Signal(int)
     finished = Signal(str)
     error = Signal(str)
+    cancelled = Signal()
+
+
+class DownloadCancelled(Exception):
+    """Control-flow signal raised from a yt-dlp progress callback."""
 
 
 class DownloadTask(QRunnable):
@@ -50,15 +69,41 @@ class DownloadTask(QRunnable):
         self.video_id = video_id
         self.title = title
         self.signals = DownloadSignals()
+        self._paused = threading.Event()
+        self._cancelled = threading.Event()
         self.setAutoDelete(False)
 
     def run(self):
         try:
-            self.signals.finished.emit(self._download())
+            result = self._download()
+            if self._cancelled.is_set():
+                self.signals.cancelled.emit()
+            else:
+                self.signals.finished.emit(result)
         except Exception as exc:
-            self.signals.error.emit(str(exc))
+            if self._cancelled.is_set() or isinstance(exc, DownloadCancelled):
+                self.signals.cancelled.emit()
+            else:
+                self.signals.error.emit(str(exc))
+
+    def pause(self) -> None:
+        self._paused.set()
+
+    def resume(self) -> None:
+        self._paused.clear()
+
+    def cancel(self) -> None:
+        self._cancelled.set()
+        self._paused.clear()
+
+    def _wait_for_control(self) -> None:
+        while self._paused.is_set() and not self._cancelled.is_set():
+            self._cancelled.wait(0.1)
+        if self._cancelled.is_set():
+            raise DownloadCancelled()
 
     def _progress_hook(self, data):
+        self._wait_for_control()
         if data.get("status") == "downloading":
             total = data.get("total_bytes") or data.get("total_bytes_estimate")
             downloaded = data.get("downloaded_bytes", 0)
@@ -85,6 +130,9 @@ class DownloadTask(QRunnable):
             "noprogress": True,
             "noplaylist": True,
             "retries": 2,
+            "socket_timeout": 15,
+            "continuedl": True,
+            "nopart": False,
             "logger": _QuietYdlLogger(),
         }
         converter = ffmpeg_location()
@@ -134,6 +182,7 @@ class Downloader(QObject):
     progress = Signal(int)
     downloadFinished = Signal(str)
     downloadFailed = Signal(str)
+    downloadCancelled = Signal()
 
     def __init__(self):
         super().__init__()
@@ -151,6 +200,7 @@ class Downloader(QObject):
         task.signals.progress.connect(self.progress.emit)
         task.signals.finished.connect(self._on_finished)
         task.signals.error.connect(self._on_error)
+        task.signals.cancelled.connect(self._on_cancelled)
         self._pool.start(task)
         return True
 
@@ -161,6 +211,22 @@ class Downloader(QObject):
     def _on_error(self, message: str):
         self._finish_task()
         self.downloadFailed.emit(message or "The download did not complete.")
+
+    def _on_cancelled(self):
+        self._finish_task()
+        self.downloadCancelled.emit()
+
+    def pause(self) -> None:
+        if self._task is not None:
+            self._task.pause()
+
+    def resume(self) -> None:
+        if self._task is not None:
+            self._task.resume()
+
+    def cancel(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
 
     def _finish_task(self):
         self._active = False
