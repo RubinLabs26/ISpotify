@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QSize, Qt
@@ -11,6 +12,29 @@ from PySide6.QtWidgets import (
 )
 
 from ui.theme import COLORS
+
+
+PLAYLIST_GRADIENTS = (
+    ("#7c2d4f", "#d65382"),
+    ("#224e77", "#3d8ac4"),
+    ("#2d664f", "#45a276"),
+    ("#69409a", "#9a67d2"),
+    ("#8a4725", "#df8242"),
+    ("#285f6f", "#45a7b4"),
+    ("#6e3438", "#c75757"),
+    ("#4e5f27", "#8aa33d"),
+    ("#433b8f", "#7667d8"),
+    ("#8b305f", "#d85b91"),
+    ("#91651c", "#dfaa3f"),
+    ("#31557e", "#4f86bd"),
+)
+
+
+def playlist_colors(seed: str) -> tuple[str, str]:
+    """Return a stable, high-contrast gradient for a playlist identifier."""
+    digest = hashlib.sha256(str(seed or "playlist").encode("utf-8")).digest()
+    value = int.from_bytes(digest[:4], "big")
+    return PLAYLIST_GRADIENTS[value % len(PLAYLIST_GRADIENTS)]
 
 
 def format_duration(seconds: int | float | None) -> str:
@@ -117,6 +141,31 @@ class ArtworkLabel(QLabel):
     def set_artwork(self, pixmap: QPixmap) -> None:
         """Keep the display audio-only even when older callers pass an image."""
         self.setPixmap(artwork_pixmap(self.title, self.artwork_size))
+
+
+class PlaylistArtworkLabel(QLabel):
+    """A persistent colored playlist cover derived from its stable ID."""
+
+    def __init__(self, title: str, seed: str, size: QSize, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(size)
+        self.setAlignment(Qt.AlignCenter)
+        self.setToolTip(title)
+        start, end = playlist_colors(seed)
+        self.setStyleSheet(
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+            f"stop:0 {start}, stop:1 {end}); "
+            "border: 1px solid rgba(255, 255, 255, 0.16); "
+            "border-radius: 9px; padding: 0px;"
+        )
+        icon_path = (
+            Path(__file__).resolve().parents[1]
+            / "assets"
+            / "icons"
+            / "SP_PlaylistGlyph.svg"
+        )
+        icon_side = max(18, round(min(size.width(), size.height()) * 0.42))
+        self.setPixmap(QIcon(str(icon_path)).pixmap(QSize(icon_side, icon_side)))
 
 
 class StatusDot(QLabel):
