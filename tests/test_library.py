@@ -84,6 +84,19 @@ class LibraryPlaylistTests(unittest.TestCase):
             [track["video_id"] for track in target["tracks"]], ["one"]
         )
 
+    def test_new_song_keeps_duration_and_gets_thumbnail_fallback(self):
+        library = Library()
+        library.add_song(
+            "abcdefghijk", "Song", "Artist", "", str(self.file_one), 245
+        )
+
+        song = library.find("abcdefghijk")
+        self.assertEqual(song["duration"], 245)
+        self.assertEqual(
+            song["thumbnail_url"],
+            "https://i.ytimg.com/vi/abcdefghijk/mqdefault.jpg",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

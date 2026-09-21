@@ -443,7 +443,7 @@ class MainWindow(QMainWindow):
         if result:
             self.library.add_song(
                 result.video_id, result.title, result.channel,
-                result.thumbnail_url, file_path,
+                result.thumbnail_url, file_path, result.duration,
             )
             self._update_downloaded_playlist(result)
         self.library_page.refresh()

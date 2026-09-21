@@ -5,8 +5,9 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QSize, Qt
-from PySide6.QtGui import QIcon, QPainter, QPixmap
+from PySide6.QtCore import QEvent, QSize, Qt, QUrl
+from PySide6.QtGui import QIcon, QPainter, QPainterPath, QPixmap
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (
     QApplication, QLabel, QPushButton, QSizePolicy, QStyle,
 )
@@ -28,6 +29,8 @@ PLAYLIST_GRADIENTS = (
     ("#91651c", "#dfaa3f"),
     ("#31557e", "#4f86bd"),
 )
+
+_THUMBNAIL_CACHE: dict[str, QPixmap] = {}
 
 
 def playlist_colors(seed: str) -> tuple[str, str]:
@@ -84,6 +87,26 @@ def artwork_pixmap(title: str, size: QSize) -> QPixmap:
     return canvas
 
 
+def thumbnail_pixmap(source: QPixmap, size: QSize) -> QPixmap:
+    """Crop a cover image to the tile and apply rounded corners."""
+    scaled = source.scaled(
+        size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+    )
+    x = max(0, (scaled.width() - size.width()) // 2)
+    y = max(0, (scaled.height() - size.height()) // 2)
+    cropped = scaled.copy(x, y, size.width(), size.height())
+    output = QPixmap(size)
+    output.fill(Qt.transparent)
+    painter = QPainter(output)
+    painter.setRenderHint(QPainter.Antialiasing)
+    path = QPainterPath()
+    path.addRoundedRect(0, 0, size.width(), size.height(), 9, 9)
+    painter.setClipPath(path)
+    painter.drawPixmap(0, 0, cropped)
+    painter.end()
+    return output
+
+
 class MotionButton(QPushButton):
     """A stable button base with reliable native click delivery.
 
@@ -124,10 +147,12 @@ def icon_button(icon_name: str, tooltip: str, object_name: str = "iconButton",
 
 
 class ArtworkLabel(QLabel):
-    def __init__(self, title: str, size: QSize, parent=None):
+    def __init__(self, title: str, size: QSize, thumbnail_url: str = "", parent=None):
         super().__init__(parent)
         self.title = title
         self.artwork_size = size
+        self._thumbnail_url = ""
+        self._network = QNetworkAccessManager(self)
         self.setFixedSize(size)
         self.setPixmap(artwork_pixmap(title, size))
         self.setAlignment(Qt.AlignCenter)
@@ -137,10 +162,39 @@ class ArtworkLabel(QLabel):
             f"border: 1px solid {COLORS['border']}; "
             "border-radius: 9px; padding: 0px;"
         )
+        self.set_thumbnail(thumbnail_url)
 
     def set_artwork(self, pixmap: QPixmap) -> None:
-        """Keep the display audio-only even when older callers pass an image."""
+        self.setPixmap(thumbnail_pixmap(pixmap, self.artwork_size))
+
+    def set_thumbnail(self, thumbnail_url: str) -> None:
+        """Load remote artwork asynchronously and retain the music-icon fallback."""
+        self._thumbnail_url = str(thumbnail_url or "").strip()
         self.setPixmap(artwork_pixmap(self.title, self.artwork_size))
+        if not self._thumbnail_url.startswith(("https://", "http://")):
+            return
+        cached = _THUMBNAIL_CACHE.get(self._thumbnail_url)
+        if cached is not None:
+            self.set_artwork(cached)
+            return
+        request = QNetworkRequest(QUrl(self._thumbnail_url))
+        request.setRawHeader(b"User-Agent", b"iSpotify/19.1")
+        reply = self._network.get(request)
+        reply.finished.connect(
+            lambda current=reply, url=self._thumbnail_url: self._finish_thumbnail(
+                current, url
+            )
+        )
+
+    def _finish_thumbnail(self, reply, url: str) -> None:
+        try:
+            data = bytes(reply.readAll())
+            pixmap = QPixmap()
+            if url == self._thumbnail_url and data and pixmap.loadFromData(data):
+                _THUMBNAIL_CACHE[url] = pixmap
+                self.set_artwork(pixmap)
+        finally:
+            reply.deleteLater()
 
 
 class PlaylistArtworkLabel(QLabel):

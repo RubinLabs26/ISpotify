@@ -30,7 +30,9 @@ class SearchResultCard(QFrame):
         self.select_box.setToolTip("Select for batch download")
         self.select_box.stateChanged.connect(self._selection_changed)
         layout.addWidget(self.select_box)
-        self.artwork = ArtworkLabel(result.title, QSize(108, 64))
+        self.artwork = ArtworkLabel(
+            result.title, QSize(108, 64), result.thumbnail_url
+        )
         layout.addWidget(self.artwork)
         text = QVBoxLayout()
         text.setSpacing(3)
@@ -105,10 +107,10 @@ class PlaylistTrackCard(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(12)
-        number = QLabel("♪")
-        number.setObjectName("muted")
-        number.setFixedWidth(16)
-        layout.addWidget(number)
+        artwork = ArtworkLabel(
+            track.title, QSize(56, 42), track.thumbnail_url
+        )
+        layout.addWidget(artwork)
         copy = QVBoxLayout()
         title = QLabel(track.title)
         title.setObjectName("cardTitle")
