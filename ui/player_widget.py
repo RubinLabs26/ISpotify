@@ -174,6 +174,22 @@ class PlayerWidget(QWidget):
         QTimer.singleShot(0, lambda: self._start_song(song, load_token))
         self.trackChanged.emit(song)
 
+    def refresh_song_metadata(self):
+        """Refresh labels after a library rename without restarting playback."""
+        if not self.current_song:
+            return
+        title = self.current_song.get("title", "Unknown title")
+        self._elide(self.title_label, title, 168)
+        self._elide(
+            self.artist_label,
+            self.current_song.get("channel", "Unknown artist"),
+            168,
+        )
+        self.artwork.title = title
+        self.artwork.set_artwork(
+            artwork_pixmap(title, self.artwork.artwork_size)
+        )
+
     def _start_song(self, song: dict, load_token: int):
         if load_token != self._load_token:
             return

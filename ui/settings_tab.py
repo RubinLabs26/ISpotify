@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, QSettings, QThread, Signal, Slot
+from PySide6.QtCore import QObject, QSettings, QThread, QUrl, Signal, Slot
+from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox, QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolicy,
     QTextEdit, QVBoxLayout, QWidget,
@@ -39,6 +40,7 @@ class CookieValidationWorker(QObject):
 
 class SettingsTab(QWidget):
     statusChanged = Signal(str)
+    discordStatusChanged = Signal(str)
     discordChanged = Signal(bool)
     discordLoginRequested = Signal()
     discordLogoutRequested = Signal()
@@ -91,6 +93,27 @@ class SettingsTab(QWidget):
         self.discord_account_button.clicked.connect(self._on_discord_account)
         discord_config.addWidget(self.discord_account_button)
         discord_layout.addLayout(discord_config)
+        self._discord_authorization_url = ""
+        self.discord_auth_panel = QWidget()
+        auth_layout = QHBoxLayout(self.discord_auth_panel)
+        auth_layout.setContentsMargins(0, 3, 0, 0)
+        auth_layout.setSpacing(10)
+        self.discord_auth_help = QLabel(
+            "If the browser did not open, open or copy the authorization link."
+        )
+        self.discord_auth_help.setObjectName("muted")
+        self.discord_auth_help.setWordWrap(True)
+        auth_layout.addWidget(self.discord_auth_help, 1)
+        self.discord_open_button = MotionButton("Open link")
+        self.discord_open_button.setObjectName("ghostButton")
+        self.discord_open_button.clicked.connect(self._open_discord_link)
+        auth_layout.addWidget(self.discord_open_button)
+        self.discord_copy_button = MotionButton("Copy link")
+        self.discord_copy_button.setObjectName("ghostButton")
+        self.discord_copy_button.clicked.connect(self._copy_discord_link)
+        auth_layout.addWidget(self.discord_copy_button)
+        self.discord_auth_panel.hide()
+        discord_layout.addWidget(self.discord_auth_panel)
         self.discord_status = QLabel("Discord activity is off")
         self.discord_status.setObjectName("muted")
         discord_layout.addWidget(self.discord_status)
@@ -209,12 +232,56 @@ class SettingsTab(QWidget):
         self.discord_account_button.setEnabled(
             "waiting" not in text.lower() and "restoring" not in text.lower()
         )
+        if connected:
+            self.discord_auth_panel.hide()
+            self._discord_authorization_url = ""
+
+    @Slot(str)
+    def open_discord_authorization(self, url: str) -> None:
+        self._discord_authorization_url = url
+        self.discord_auth_panel.show()
+        opened = QDesktopServices.openUrl(QUrl(url))
+        if opened:
+            self.discord_auth_help.setText(
+                "Discord authorization opened in your browser. If it did not "
+                "appear, open or copy the link."
+            )
+        else:
+            self.discord_auth_help.setText(
+                "The browser could not be opened. Copy the authorization link "
+                "and paste it into a browser."
+            )
+            self.discordStatusChanged.emit(
+                "warning::Could not open a browser. Use Copy link to continue."
+            )
+
+    def _open_discord_link(self) -> None:
+        if not self._discord_authorization_url:
+            return
+        if not QDesktopServices.openUrl(
+            QUrl(self._discord_authorization_url)
+        ):
+            self.discordStatusChanged.emit(
+                "warning::Could not open a browser. Copy the link instead."
+            )
+
+    def _copy_discord_link(self) -> None:
+        if not self._discord_authorization_url:
+            return
+        QGuiApplication.clipboard().setText(self._discord_authorization_url)
+        self.discordStatusChanged.emit(
+            "info::Discord authorization link copied to the clipboard."
+        )
 
     def _on_discord_account(self) -> None:
         self.discord_account_button.setEnabled(False)
         if self._discord_connected:
+            self.discord_auth_panel.hide()
+            self._discord_authorization_url = ""
             self.discordLogoutRequested.emit()
         else:
+            self.discord_auth_panel.hide()
+            self._discord_authorization_url = ""
             self.discordLoginRequested.emit()
 
     def _save_discord_settings(self) -> None:

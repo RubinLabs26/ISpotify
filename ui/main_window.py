@@ -160,6 +160,8 @@ class MainWindow(QMainWindow):
         )
         self.library_page.playRequested.connect(self._play_song)
         self.library_page.libraryChanged.connect(self.home.refresh)
+        self.library_page.songRenamed.connect(self._on_song_renamed)
+        self.library_page.statusChanged.connect(self._on_library_status)
         self.downloader.progress.connect(self._on_download_progress)
         self.downloader.downloadFinished.connect(self._on_download_finished)
         self.downloader.downloadFailed.connect(self._on_download_failed)
@@ -174,9 +176,13 @@ class MainWindow(QMainWindow):
         self.player.previousRequested.connect(self._play_previous)
         self.player.nextRequested.connect(self._play_next)
         self.settings.statusChanged.connect(self._on_settings_status)
+        self.settings.discordStatusChanged.connect(self._on_discord_ui_status)
         self.settings.discordChanged.connect(self._configure_discord)
         self.settings.discordLoginRequested.connect(self.discord_presence.login)
         self.settings.discordLogoutRequested.connect(self.discord_presence.logout)
+        self.discord_presence.authorizationUrlReady.connect(
+            self.settings.open_discord_authorization
+        )
         self.discord_presence.statusChanged.connect(
             self.settings.set_discord_status
         )
@@ -191,6 +197,33 @@ class MainWindow(QMainWindow):
             "warning": "Saved with a download warning", "info": "Done",
         }
         self.toast_manager.show_toast(titles.get(kind, "Settings"), detail, kind)
+
+    def _on_library_status(self, message: str):
+        kind, _, detail = message.partition("::")
+        titles = {
+            "success": "Library updated",
+            "error": "Library update failed",
+            "warning": "Library warning",
+            "info": "Library",
+        }
+        self.toast_manager.show_toast(
+            titles.get(kind, "Library"), detail, kind
+        )
+
+    def _on_discord_ui_status(self, message: str):
+        kind, _, detail = message.partition("::")
+        self.toast_manager.show_toast(
+            "Discord authorization", detail, kind
+        )
+
+    def _on_song_renamed(self, video_id: str, _title: str):
+        self._playback_songs = list(reversed(self.library.all_songs()))
+        if (
+            self.player.current_song
+            and self.player.current_song.get("video_id") == video_id
+        ):
+            self.player.refresh_song_metadata()
+            self._sync_discord_presence()
 
     def navigate(self, page: str, record_history: bool = True):
         pages = {"home": (self.home, "Home", "Your music, your way."),

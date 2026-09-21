@@ -34,18 +34,18 @@
 | | |
 |---|---|
 | **Search and discovery**<br>Search for songs and playlists, explore playlist tracks, and select multiple items for download. | **Playback**<br>Play local MP3 files with queue, previous/next, seek, volume, and automatic pause when headphones disconnect. |
-| **Downloads and library**<br>Queue MP3 downloads, follow progress, organize local playlists, and listen offline. | **Privacy and integrations**<br>Use optional local YouTube cookies and optional Discord listening activity with credentials kept in the operating system vault. |
+| **Downloads and library**<br>Queue MP3 downloads, create and rename playlists, edit song titles, move and reorder tracks, and listen offline. | **Privacy and integrations**<br>Use optional local YouTube cookies and optional Discord listening activity with credentials kept in the operating system vault. |
 | **Desktop experience**<br>Use a responsive PySide6 interface designed for Windows and Linux. | **Flexible installation**<br>Choose a Windows installer, portable executable, Debian package, Linux repository, or universal installer. |
 
 ## Download
 
-The current stable release is **v19.0.0**. Checksums are published beside the standalone executables.
+The current stable release is **v19.1.0**. Checksums are published beside the standalone executables.
 
 | Platform | Package | Download |
 |---|---|---|
 | Windows 10/11 | Installer | [ISpotify-Setup-x86_64.exe](https://github.com/RubinLabs26/ISpotify/releases/latest/download/ISpotify-Setup-x86_64.exe) |
 | Windows 10/11 | Portable | [ISpotify-windows-x86_64.exe](https://github.com/RubinLabs26/ISpotify/releases/latest/download/ISpotify-windows-x86_64.exe) |
-| Debian / Ubuntu | DEB package | [ispotify_19.0.0_amd64.deb](https://github.com/RubinLabs26/ISpotify/releases/download/v19.0.0/ispotify_19.0.0_amd64.deb) |
+| Debian / Ubuntu | DEB package | [ispotify_19.1.0_amd64.deb](https://github.com/RubinLabs26/ISpotify/releases/download/v19.1.0/ispotify_19.1.0_amd64.deb) |
 | Linux x86-64 | Portable | [ISpotify-linux-x86_64](https://github.com/RubinLabs26/ISpotify/releases/latest/download/ISpotify-linux-x86_64) |
 | All packages | Release page | [Latest release](https://github.com/RubinLabs26/ISpotify/releases/latest) |
 
@@ -70,8 +70,9 @@ The portable Linux build requires x86-64 and glibc 2.36 or newer.
 Discord integration is optional. If the Discord desktop app is running,
 iSpotify can publish **Listening to iSpotify** and the current track. Browser
 users can choose **Connect Discord account** in Settings and authorize through
-Discord's official login page. iSpotify never asks for a password, bot token,
-or raw user token.
+Discord's official login page. The authorization link can be opened again or
+copied when a browser cannot be launched automatically. iSpotify never asks for
+a password, bot token, or raw user token.
 
 The official release packages include the Discord Social SDK runtime. Discord's
 distribution terms do not permit publishing its raw proprietary library in this
