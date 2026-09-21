@@ -12,6 +12,8 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - dependencies
+      - python
+      - automated
     commit-message:
       prefix: deps
       include: scope
@@ -34,6 +36,8 @@ updates:
     open-pull-requests-limit: 3
     labels:
       - dependencies
+      - github-actions
+      - automated
     commit-message:
       prefix: ci
       include: scope
