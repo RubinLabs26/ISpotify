@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (
 
 from core.library import Library
 from ui.widgets import (
-    ArtworkLabel, EmptyState, MotionButton, StatusDot, format_duration,
-    icon_button, standard_icon,
+    ArtworkLabel, EmptyState, MotionButton, PlaylistArtworkLabel, StatusDot,
+    format_duration, icon_button, standard_icon,
 )
 
 
@@ -157,8 +157,10 @@ class PlaylistLibraryCard(QFrame):
         root.setSpacing(8)
         header = QHBoxLayout()
         header.setSpacing(10)
-        artwork = ArtworkLabel(
-            playlist.get("title", "playlist"), QSize(64, 50)
+        artwork = PlaylistArtworkLabel(
+            playlist.get("title", "playlist"),
+            playlist_id,
+            QSize(64, 50),
         )
         header.addWidget(artwork)
         self.artwork = artwork

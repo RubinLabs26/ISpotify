@@ -8,8 +8,8 @@ from PySide6.QtWidgets import (
 
 from core.searcher import PlaylistResult, Searcher
 from ui.widgets import (
-    ArtworkLabel, EmptyState, MotionButton, format_duration, icon_button,
-    standard_icon,
+    ArtworkLabel, EmptyState, MotionButton, PlaylistArtworkLabel,
+    format_duration, icon_button, standard_icon,
 )
 
 
@@ -70,7 +70,9 @@ class PlaylistResultCard(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 10, 14, 10)
         layout.setSpacing(14)
-        self.artwork = ArtworkLabel(playlist.title, QSize(108, 78))
+        self.artwork = PlaylistArtworkLabel(
+            playlist.title, playlist.playlist_id, QSize(108, 78)
+        )
         layout.addWidget(self.artwork)
         copy = QVBoxLayout()
         title = QLabel(playlist.title)
@@ -356,7 +358,9 @@ class SearchTab(QWidget):
         back = icon_button("SP_ArrowLeft", "Back to playlist results", "backButton")
         back.clicked.connect(self._restore_playlist_search)
         header_layout.addWidget(back, 0, Qt.AlignTop)
-        artwork = ArtworkLabel(playlist.title, QSize(140, 100))
+        artwork = PlaylistArtworkLabel(
+            playlist.title, playlist.playlist_id, QSize(140, 100)
+        )
         header_layout.addWidget(artwork)
         copy = QVBoxLayout()
         title = QLabel(playlist.title)
