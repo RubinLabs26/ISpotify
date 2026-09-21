@@ -10,10 +10,12 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import secrets
 import sys
 import time
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urlencode
 
 import keyring
 
@@ -22,6 +24,8 @@ APPLICATION_ID = 1551266524839411752
 SDK_VERSION = "1.10.19337"
 TOKEN_SERVICE = "iSpotify Discord"
 TOKEN_ACCOUNT = str(APPLICATION_ID)
+DISCORD_AUTHORIZE_ENDPOINT = "https://discord.com/oauth2/authorize"
+DESKTOP_REDIRECT_URI = "http://127.0.0.1/callback"
 
 
 class DiscordSdkError(RuntimeError):
@@ -59,6 +63,20 @@ def _friendly_login_error(message: str) -> str:
     if "invalid_client" in lowered:
         return "Discord setup required: enable Public Client on the OAuth2 page"
     return f"Discord login failed: {message}"
+
+
+def authorization_url(scopes: str, challenge: str, state: str) -> str:
+    """Build the browser fallback for the SDK-managed desktop OAuth flow."""
+    query = urlencode({
+        "client_id": str(APPLICATION_ID),
+        "response_type": "code",
+        "redirect_uri": DESKTOP_REDIRECT_URI,
+        "scope": scopes,
+        "state": state,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+    })
+    return f"{DISCORD_AUTHORIZE_ENDPOINT}?{query}"
 
 
 def sdk_library_path() -> Path:
@@ -136,10 +154,12 @@ class DiscordSocialClient:
         on_status: Callable[[int, int], None],
         on_tokens: Callable[[str, str, int], None],
         on_account: Callable[[bool, str], None],
+        on_authorization_url: Callable[[str], None] | None = None,
     ):
         self.on_status = on_status
         self.on_tokens = on_tokens
         self.on_account = on_account
+        self.on_authorization_url = on_authorization_url or (lambda _url: None)
         self._callbacks: list[object] = []
         self._access_token = ""
         self._refresh_token = ""
@@ -186,8 +206,16 @@ class DiscordSocialClient:
         lib.Discord_AuthorizationArgs_Drop.argtypes = [pointer]
         lib.Discord_AuthorizationArgs_SetClientId.argtypes = [pointer, ctypes.c_uint64]
         lib.Discord_AuthorizationArgs_SetScopes.argtypes = [pointer, DiscordString]
+        lib.Discord_AuthorizationArgs_SetState.argtypes = [
+            pointer,
+            string_pointer,
+        ]
         lib.Discord_AuthorizationArgs_SetCodeChallenge.argtypes = [pointer, pointer]
         lib.Discord_AuthorizationCodeChallenge_Drop.argtypes = [pointer]
+        lib.Discord_AuthorizationCodeChallenge_Challenge.argtypes = [
+            pointer,
+            string_pointer,
+        ]
         lib.Discord_AuthorizationCodeVerifier_Drop.argtypes = [pointer]
         lib.Discord_AuthorizationCodeVerifier_Challenge.argtypes = [pointer, pointer]
         lib.Discord_AuthorizationCodeVerifier_Verifier.argtypes = [
@@ -400,6 +428,11 @@ class DiscordSocialClient:
         self.lib.Discord_AuthorizationCodeVerifier_Challenge(
             ctypes.byref(verifier), ctypes.byref(challenge)
         )
+        challenge_value = DiscordString()
+        self.lib.Discord_AuthorizationCodeChallenge_Challenge(
+            ctypes.byref(challenge), ctypes.byref(challenge_value)
+        )
+        challenge_text = self._owned_string(challenge_value)
         verifier_value = DiscordString()
         self.lib.Discord_AuthorizationCodeVerifier_Verifier(
             ctypes.byref(verifier), ctypes.byref(verifier_value)
@@ -410,12 +443,21 @@ class DiscordSocialClient:
             self.lib.Discord_AuthorizationArgs_SetClientId(
                 ctypes.byref(args), APPLICATION_ID
             )
-            scopes, scopes_buffer = _input_string(self._default_scopes())
+            scopes_text = self._default_scopes()
+            scopes, scopes_buffer = _input_string(scopes_text)
             self.lib.Discord_AuthorizationArgs_SetScopes(
                 ctypes.byref(args), scopes
             )
+            state_text = secrets.token_urlsafe(32)
+            state, state_buffer = _input_string(state_text)
+            self.lib.Discord_AuthorizationArgs_SetState(
+                ctypes.byref(args), ctypes.byref(state)
+            )
             self.lib.Discord_AuthorizationArgs_SetCodeChallenge(
                 ctypes.byref(args), ctypes.byref(challenge)
+            )
+            self.on_authorization_url(
+                authorization_url(scopes_text, challenge_text, state_text)
             )
 
             @self._remember
@@ -439,7 +481,7 @@ class DiscordSocialClient:
                 None,
                 None,
             )
-            del scopes_buffer
+            del scopes_buffer, state_buffer
         finally:
             self.lib.Discord_AuthorizationArgs_Drop(ctypes.byref(args))
             self.lib.Discord_AuthorizationCodeChallenge_Drop(

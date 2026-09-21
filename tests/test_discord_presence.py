@@ -1,12 +1,19 @@
 import unittest
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
 from core.discord_presence import (
     DEFAULT_APPLICATION_ID,
     presence_payload,
     valid_application_id,
 )
-from core.discord_social_sdk import APPLICATION_ID, TokenStore, _friendly_login_error
+from core.discord_social_sdk import (
+    APPLICATION_ID,
+    DESKTOP_REDIRECT_URI,
+    TokenStore,
+    _friendly_login_error,
+    authorization_url,
+)
 
 
 class DiscordPresenceTests(unittest.TestCase):
@@ -29,6 +36,19 @@ class DiscordPresenceTests(unittest.TestCase):
             "Public Client",
             _friendly_login_error("OAuth2 Error: invalid_client"),
         )
+
+    def test_browser_fallback_uses_the_sdk_oauth_parameters(self):
+        url = authorization_url("identify sdk.social_layer", "challenge", "state")
+        parsed = urlparse(url)
+        query = parse_qs(parsed.query)
+        self.assertEqual(parsed.scheme, "https")
+        self.assertEqual(parsed.netloc, "discord.com")
+        self.assertEqual(query["client_id"], [str(APPLICATION_ID)])
+        self.assertEqual(query["redirect_uri"], [DESKTOP_REDIRECT_URI])
+        self.assertEqual(query["scope"], ["identify sdk.social_layer"])
+        self.assertEqual(query["state"], ["state"])
+        self.assertEqual(query["code_challenge"], ["challenge"])
+        self.assertEqual(query["code_challenge_method"], ["S256"])
 
     @patch("core.discord_presence.time.time", return_value=2_000)
     def test_builds_listening_activity_with_elapsed_time(self, _time):

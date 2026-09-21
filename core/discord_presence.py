@@ -46,6 +46,7 @@ class DiscordPresence(QObject):
 
     statusChanged = Signal(bool, str)
     accountChanged = Signal(bool, str)
+    authorizationUrlReady = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -121,7 +122,10 @@ class DiscordPresence(QObject):
                 return client
             try:
                 client = DiscordSocialClient(
-                    sdk_status, tokens_received, account_changed
+                    sdk_status,
+                    tokens_received,
+                    account_changed,
+                    self.authorizationUrlReady.emit,
                 )
             except (DiscordSdkError, OSError) as exc:
                 self.statusChanged.emit(False, str(exc))
