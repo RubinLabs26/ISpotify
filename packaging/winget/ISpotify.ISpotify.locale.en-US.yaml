@@ -23,6 +23,7 @@ ReleaseNotes: |-
   Playlist colors remain consistent across restarts and playlist renames.
   Displays track thumbnails throughout search, library, playlists, home, and the player.
   Adds cover art, playback timing, and Listen on YouTube/Listen on iSpotify buttons to Discord activity.
+  Checks for updates in the background and offers verified in-app installation with a restart prompt.
 ReleaseNotesUrl: https://github.com/RubinLabs26/ISpotify/releases/tag/v19.1.2
 ManifestType: defaultLocale
 ManifestVersion: 1.12.0
