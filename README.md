@@ -149,6 +149,8 @@ sensitive security issues using [SECURITY.md](SECURITY.md).
 
 [![Contributors](https://contrib.rocks/image?repo=RubinLabs26/ISpotify)](https://github.com/RubinLabs26/ISpotify/graphs/contributors)
 
+Project contributor: [@rubinbastakoti](https://github.com/rubinbastakoti)
+
 Licensed under the [MIT License](LICENSE).
 
 ---
