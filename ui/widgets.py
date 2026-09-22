@@ -5,14 +5,72 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QSize, Qt, QUrl
-from PySide6.QtGui import QIcon, QPainter, QPainterPath, QPixmap
+from PySide6.QtCore import (
+    QEasingCurve, QEvent, QPropertyAnimation, QSize, Qt, QUrl,
+)
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (
-    QApplication, QLabel, QPushButton, QSizePolicy, QStyle,
+    QApplication, QGraphicsDropShadowEffect, QLabel, QPushButton, QSizePolicy,
+    QStyle,
 )
 
-from ui.theme import COLORS
+from ui.theme import COLORS, MOTION
+
+
+def soft_shadow(widget, *, blur: int = 28, y: int = 6, alpha: int = 115):
+    """Attach a soft drop shadow to a container widget for layered depth.
+
+    Returns the effect so callers can keep a reference (Qt does not take
+    ownership strongly enough to survive GC on its own in every build). Used
+    on raised surfaces such as the player bar and cards. Kept off individual
+    buttons on purpose: per-button graphics effects are what caused the
+    hover-repaint glitches noted on MotionButton.
+    """
+    effect = QGraphicsDropShadowEffect(widget)
+    effect.setBlurRadius(blur)
+    effect.setXOffset(0)
+    effect.setYOffset(y)
+    effect.setColor(QColor(0, 0, 0, alpha))
+    widget.setGraphicsEffect(effect)
+    return effect
+
+
+class HoverLift:
+    """Animate a widget's drop-shadow on hover for a subtle, tactile lift.
+
+    Drives only the shadow effect's blur/offset via QPropertyAnimation, never
+    the widget's own geometry or event handling, so it cannot interfere with
+    click delivery. Install on a container (e.g. an icon button) that already
+    carries a soft_shadow-style effect.
+    """
+
+    def __init__(self, widget, effect, *, rest_blur=18, rest_y=4,
+                 lift_blur=30, lift_y=8):
+        self._widget = widget
+        self._effect = effect
+        self._rest_blur, self._rest_y = rest_blur, rest_y
+        self._lift_blur, self._lift_y = lift_blur, lift_y
+        self._blur_anim = QPropertyAnimation(effect, b"blurRadius", widget)
+        self._y_anim = QPropertyAnimation(effect, b"yOffset", widget)
+        for anim in (self._blur_anim, self._y_anim):
+            anim.setDuration(MOTION["fast"])
+            anim.setEasingCurve(QEasingCurve.OutCubic)
+        widget.installEventFilter_target = self  # keep a hard reference
+
+    def to_rest(self):
+        self._animate(self._rest_blur, self._rest_y)
+
+    def to_lift(self):
+        self._animate(self._lift_blur, self._lift_y)
+
+    def _animate(self, blur, y):
+        self._blur_anim.stop()
+        self._y_anim.stop()
+        self._blur_anim.setEndValue(blur)
+        self._y_anim.setEndValue(y)
+        self._blur_anim.start()
+        self._y_anim.start()
 
 
 PLAYLIST_GRADIENTS = (
