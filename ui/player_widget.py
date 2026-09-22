@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget,
 )
 
-from ui.widgets import ArtworkLabel, format_duration, icon_button, standard_icon
+from ui.widgets import ArtworkLabel, MotionButton, format_duration, icon_button, standard_icon
 from core.audio_devices import (
     classify_audio_output,
     headphones_were_disconnected,
@@ -21,6 +21,9 @@ class PlayerWidget(QWidget):
     headphonesDisconnected = Signal(str, bool)
     previousRequested = Signal()
     nextRequested = Signal()
+    queueRequested = Signal()
+    shuffleRequested = Signal()
+    repeatRequested = Signal()
 
     def __init__(self):
         super().__init__()
@@ -38,9 +41,13 @@ class PlayerWidget(QWidget):
         self.player.setAudioOutput(self.audio_output)
         self.audio_output.setVolume(0.7)
 
-        layout = QHBoxLayout(self)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        layout = QHBoxLayout()
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(12)
+        root.addLayout(layout)
         self.artwork = ArtworkLabel("iSpotify", QSize(46, 46))
         layout.addWidget(self.artwork)
         info = QVBoxLayout()
@@ -100,6 +107,22 @@ class PlayerWidget(QWidget):
             lambda value: self.audio_output.setVolume(value / 100)
         )
         layout.addWidget(self.volume_slider)
+        options = QHBoxLayout()
+        options.setContentsMargins(16, 0, 16, 7)
+        options.addStretch()
+        self.shuffle_button = MotionButton("Shuffle off")
+        self.shuffle_button.setObjectName("ghostButton")
+        self.shuffle_button.clicked.connect(self.shuffleRequested.emit)
+        options.addWidget(self.shuffle_button)
+        self.repeat_button = MotionButton("Repeat off")
+        self.repeat_button.setObjectName("ghostButton")
+        self.repeat_button.clicked.connect(self.repeatRequested.emit)
+        options.addWidget(self.repeat_button)
+        self.queue_button = MotionButton("Up Next")
+        self.queue_button.setObjectName("ghostButton")
+        self.queue_button.clicked.connect(self.queueRequested.emit)
+        options.addWidget(self.queue_button)
+        root.addLayout(options)
         self.player.positionChanged.connect(self._on_position_changed)
         self.player.durationChanged.connect(self._on_duration_changed)
         self.player.playbackStateChanged.connect(self._on_state_changed)
@@ -153,6 +176,10 @@ class PlayerWidget(QWidget):
         """Enable only the directions that exist in the current library."""
         self.prev_btn.setEnabled(can_go_previous)
         self.next_btn.setEnabled(can_go_next)
+
+    def set_playback_options(self, shuffle: bool, repeat: str) -> None:
+        self.shuffle_button.setText("Shuffle on" if shuffle else "Shuffle off")
+        self.repeat_button.setText(f"Repeat {repeat}")
 
     def load_song(self, song: dict):
         self.current_song = song

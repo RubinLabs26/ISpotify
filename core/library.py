@@ -28,6 +28,7 @@ class Library:
         migrate_legacy_storage()
         self._songs: list[dict] = []
         self._playlists: list[dict] = []
+        self._history: list[dict] = []
         self._load()
 
     def _load(self):
@@ -41,6 +42,7 @@ class Library:
             elif isinstance(data, dict):
                 self._songs = data.get("songs", [])
                 self._playlists = data.get("playlists", [])
+                self._history = data.get("history", [])
             else:
                 self._songs = []
                 self._playlists = []
@@ -48,6 +50,15 @@ class Library:
                 self._songs = []
             if not isinstance(self._playlists, list):
                 self._playlists = []
+            if not isinstance(self._history, list):
+                self._history = []
+            self._history = [
+                entry for entry in self._history
+                if isinstance(entry, dict)
+                and isinstance(entry.get("video_id"), str)
+                and entry["video_id"]
+                and isinstance(entry.get("played_at"), str)
+            ][-200:]
             changed = False
             for song in self._songs:
                 if isinstance(song, dict) and not song.get("thumbnail_url"):
@@ -71,6 +82,7 @@ class Library:
         except (OSError, json.JSONDecodeError):
             self._songs = []
             self._playlists = []
+            self._history = []
 
     def _save(self):
         LIBRARY_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -83,6 +95,7 @@ class Library:
                     "version": 2,
                     "songs": self._songs,
                     "playlists": self._playlists,
+                    "history": self._history,
                 }, handle, indent=2, ensure_ascii=False)
             os.replace(temp_name, LIBRARY_FILE)
         finally:
@@ -122,17 +135,63 @@ class Library:
             "duration": max(0, int(duration or 0)),
             "added_at": datetime.now(timezone.utc).isoformat(),
             "last_played": None,
+            "play_count": 0,
+            "favorite": False,
         })
         self._save()
 
     def mark_played(self, video_id: str):
         song = self.find(video_id)
         if song:
-            song["last_played"] = datetime.now(timezone.utc).isoformat()
+            played_at = datetime.now(timezone.utc).isoformat()
+            song["last_played"] = played_at
+            song["play_count"] = int(song.get("play_count") or 0) + 1
+            self._history.append({"video_id": video_id, "played_at": played_at})
+            self._history = self._history[-200:]
             self._save()
+
+    def toggle_favorite(self, video_id: str) -> bool:
+        song = self.find(video_id)
+        if not song:
+            return False
+        song["favorite"] = not bool(song.get("favorite"))
+        self._save()
+        return bool(song["favorite"])
+
+    def favorites(self) -> list[dict]:
+        return [song for song in self.all_songs() if song.get("favorite")]
+
+    def recently_played(self, limit: int = 20) -> list[dict]:
+        songs = {song.get("video_id"): song for song in self.all_songs()}
+        seen = set()
+        result = []
+        for entry in reversed(self._history):
+            video_id = entry["video_id"]
+            if video_id in songs and video_id not in seen:
+                seen.add(video_id)
+                result.append(songs[video_id])
+            if len(result) >= limit:
+                break
+        if not result:
+            result = sorted(
+                (song for song in songs.values() if song.get("last_played")),
+                key=lambda song: song["last_played"], reverse=True,
+            )[:limit]
+        return result
+
+    def listening_history(self) -> list[dict]:
+        songs = {song.get("video_id"): song for song in self.all_songs()}
+        return [
+            {"song": songs[entry["video_id"]], "played_at": entry["played_at"]}
+            for entry in reversed(self._history)
+            if entry["video_id"] in songs
+        ]
 
     def remove_song(self, video_id: str):
         self._songs = [s for s in self._songs if s.get("video_id") != video_id]
+        self._history = [
+            entry for entry in self._history if entry.get("video_id") != video_id
+        ]
         for playlist in self._playlists:
             playlist["tracks"] = [
                 track for track in playlist.get("tracks", [])

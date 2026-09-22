@@ -11,10 +11,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-from core.downloader import Downloader, discard_download_files
+from core.downloader import Downloader, discard_download_files, explain_download_error
 from core.download_state import DownloadState, result_from_job
 from core.discord_presence import DiscordPresence
 from core.library import Library
+from core.playback_queue import PlaybackQueue
 from core.update_install import (
     install_linux_portable, install_mode, install_windows,
     install_windows_portable,
@@ -27,6 +28,7 @@ from ui.library_tab import LibraryTab
 from ui.player_widget import PlayerWidget
 from ui.search_tab import SearchTab
 from ui.settings_tab import SettingsTab
+from ui.up_next_tab import UpNextTab
 from ui.toast import ToastManager
 from ui.widgets import MotionButton, icon_button, standard_icon
 
@@ -43,8 +45,7 @@ class MainWindow(QMainWindow):
         self._active_result = None
         self._shutting_down = False
         self._cancel_requested_ids = set()
-        self._playback_songs = []
-        self._playback_index = -1
+        self.playback_queue = PlaybackQueue()
         self._nav_buttons = []
         self._page_history = []
         self._current_page = None
@@ -124,8 +125,9 @@ class MainWindow(QMainWindow):
         self.search = SearchTab()
         self.library_page = LibraryTab(self.library)
         self.downloads = DownloadsTab()
+        self.up_next = UpNextTab()
         self.settings = SettingsTab()
-        for page in (self.home, self.search, self.library_page, self.downloads, self.settings):
+        for page in (self.home, self.search, self.library_page, self.downloads, self.up_next, self.settings):
             self.pages.addWidget(page)
         page_layout.addWidget(self.pages, 1)
         content_layout.addWidget(page_wrap, 1)
@@ -161,6 +163,7 @@ class MainWindow(QMainWindow):
             ("search", "Search", "SP_FileDialogContentsView"),
             ("library", "Library", "SP_Library"),
             ("downloading", "Downloads", "SP_ArrowDown"),
+            ("up_next", "Up Next", "SP_MediaSeekForward"),
             ("settings", "Settings", "SP_Settings"),
         ):
             button = MotionButton(f"  {label}")
@@ -182,6 +185,8 @@ class MainWindow(QMainWindow):
     def _connect(self):
         self.home.searchRequested.connect(lambda: self.navigate("search"))
         self.home.libraryRequested.connect(lambda: self.navigate("library"))
+        self.home.favoritesRequested.connect(lambda: self._open_library_filter(1))
+        self.home.historyRequested.connect(lambda: self._open_library_filter(2))
         self.home.playRequested.connect(self._play_song)
         self.search.downloadRequested.connect(self._on_download_requested)
         self.search.downloadBatchRequested.connect(self._on_download_batch_requested)
@@ -190,10 +195,13 @@ class MainWindow(QMainWindow):
             self._on_playlist_download_requested
         )
         self.library_page.playRequested.connect(self._play_song)
+        self.library_page.playNextRequested.connect(self._play_next_requested)
         self.library_page.libraryChanged.connect(self.home.refresh)
+        self.library_page.libraryChanged.connect(self._refresh_up_next)
         self.library_page.songRenamed.connect(self._on_song_renamed)
         self.library_page.statusChanged.connect(self._on_library_status)
         self.downloader.progress.connect(self._on_download_progress)
+        self.downloader.transfer.connect(self._on_download_transfer)
         self.downloader.downloadFinished.connect(self._on_download_finished)
         self.downloader.downloadFailed.connect(self._on_download_failed)
         self.downloader.downloadCancelled.connect(self._on_download_cancelled)
@@ -208,6 +216,14 @@ class MainWindow(QMainWindow):
         )
         self.player.previousRequested.connect(self._play_previous)
         self.player.nextRequested.connect(self._play_next)
+        self.player.queueRequested.connect(lambda: self.navigate("up_next"))
+        self.player.shuffleRequested.connect(self._toggle_shuffle)
+        self.player.repeatRequested.connect(self._cycle_repeat)
+        self.player.player.mediaStatusChanged.connect(self._on_media_status_changed)
+        self.up_next.playAtRequested.connect(self._play_queued_index)
+        self.up_next.removeAtRequested.connect(self._remove_queued_index)
+        self.up_next.clearRequested.connect(self._clear_up_next)
+        self.up_next.orderChanged.connect(self._reorder_up_next)
         self.settings.statusChanged.connect(self._on_settings_status)
         self.settings.discordStatusChanged.connect(self._on_discord_ui_status)
         self.settings.discordChanged.connect(self._configure_discord)
@@ -358,7 +374,7 @@ class MainWindow(QMainWindow):
         )
 
     def _on_song_renamed(self, video_id: str, _title: str):
-        self._playback_songs = list(reversed(self.library.all_songs()))
+        self._refresh_up_next()
         if (
             self.player.current_song
             and self.player.current_song.get("video_id") == video_id
@@ -366,11 +382,16 @@ class MainWindow(QMainWindow):
             self.player.refresh_song_metadata()
             self._sync_discord_presence()
 
+    def _open_library_filter(self, index: int) -> None:
+        self.library_page.filter.setCurrentIndex(index)
+        self.navigate("library")
+
     def navigate(self, page: str, record_history: bool = True):
         pages = {"home": (self.home, "Home", "Your music, your way."),
                  "search": (self.search, "Search", "Find something worth keeping."),
                  "library": (self.library_page, "Library", "Everything you chose to keep."),
                  "downloading": (self.downloads, "Downloads", "Audio moving into your collection."),
+                 "up_next": (self.up_next, "Up Next", "Choose what plays after this song."),
                  "settings": (self.settings, "Settings", "Connections and privacy controls.")}
         if page not in pages:
             return
@@ -415,41 +436,110 @@ class MainWindow(QMainWindow):
     def _play_song(self, song: dict):
         if not song.get("file_path"):
             return
-        self._playback_songs = list(reversed(self.library.all_songs()))
-        self._playback_index = next(
-            (
-                index for index, item in enumerate(self._playback_songs)
-                if item.get("video_id") == song.get("video_id")
-            ),
-            -1,
-        )
+        context = [item["video_id"] for item in reversed(self.library.all_songs())]
+        self.playback_queue.start(song.get("video_id", ""), context)
+        self._load_queued_song(song)
+
+    def _load_queued_song(self, song: dict) -> None:
         self.player.load_song(song)
         self._update_player_navigation()
         if song.get("video_id"):
             self.library.mark_played(song["video_id"])
+            if (self.library_page.filter.currentIndex() == 2
+                    or self.library_page.sort.currentIndex() >= 3):
+                self.library_page.refresh()
             self.library_page.mark_playing(song["video_id"])
+            self.home.refresh()
+        self._refresh_up_next()
         self.toast_manager.show_toast("Now playing", song.get("title", "Selected track"), "info", 2600)
 
     def _update_player_navigation(self):
         self.player.set_navigation(
-            self._playback_index > 0,
-            0 <= self._playback_index < len(self._playback_songs) - 1,
+            bool(self.playback_queue.history),
+            bool(self.playback_queue.upcoming)
+            or (self.playback_queue.repeat == "all" and bool(self.playback_queue.context)),
         )
 
     def _play_previous(self):
-        if self._playback_index <= 0:
-            return
-        self._playback_index -= 1
-        self._play_song(self._playback_songs[self._playback_index])
+        while self.playback_queue.history:
+            video_id = self.playback_queue.previous()
+            song = self.library.find(video_id) if video_id else None
+            if song:
+                self._load_queued_song(song)
+                return
+        self._refresh_up_next()
 
-    def _play_next(self):
-        if (
-            self._playback_index < 0
-            or self._playback_index >= len(self._playback_songs) - 1
-        ):
+    def _play_next(self, automatic: bool = False):
+        attempts = len(self.playback_queue.upcoming) + len(self.playback_queue.context) + 1
+        for _ in range(attempts):
+            video_id = self.playback_queue.next(automatic=automatic)
+            if not video_id:
+                self._update_player_navigation()
+                self._refresh_up_next()
+                return
+            song = self.library.find(video_id)
+            if song:
+                self._load_queued_song(song)
+                return
+
+    def _on_media_status_changed(self, status) -> None:
+        if status != QMediaPlayer.EndOfMedia or not self.playback_queue.current:
             return
-        self._playback_index += 1
-        self._play_song(self._playback_songs[self._playback_index])
+        current = self.playback_queue.current
+        QTimer.singleShot(0, lambda: self._advance_after_end(current))
+
+    def _advance_after_end(self, video_id: str) -> None:
+        if (self.playback_queue.current == video_id
+                and self.player.player.mediaStatus() == QMediaPlayer.EndOfMedia):
+            self._play_next(automatic=True)
+
+    def _play_next_requested(self, video_id: str) -> None:
+        song = self.library.find(video_id)
+        if not song:
+            return
+        if not self.playback_queue.current:
+            self._play_song(song)
+            return
+        self.playback_queue.play_next(video_id)
+        self._refresh_up_next()
+        self.toast_manager.show_toast("Added to Up Next", song["title"], "success")
+
+    def _play_queued_index(self, index: int) -> None:
+        video_id = self.playback_queue.play_at(index)
+        song = self.library.find(video_id) if video_id else None
+        if song:
+            self._load_queued_song(song)
+        else:
+            self._play_next()
+
+    def _remove_queued_index(self, index: int) -> None:
+        if self.playback_queue.remove(index):
+            self._refresh_up_next()
+
+    def _clear_up_next(self) -> None:
+        self.playback_queue.clear()
+        self._refresh_up_next()
+
+    def _reorder_up_next(self, video_ids: list[str]) -> None:
+        if self.playback_queue.reorder(video_ids):
+            self._update_player_navigation()
+
+    def _toggle_shuffle(self) -> None:
+        self.playback_queue.toggle_shuffle()
+        self._refresh_up_next()
+
+    def _cycle_repeat(self) -> None:
+        self.playback_queue.cycle_repeat()
+        self._refresh_up_next()
+
+    def _refresh_up_next(self) -> None:
+        self.up_next.set_queue(
+            self.playback_queue.current, self.playback_queue.upcoming, self.library
+        )
+        self.player.set_playback_options(
+            self.playback_queue.shuffle, self.playback_queue.repeat
+        )
+        self._update_player_navigation()
 
     def _on_track_changed(self, song):
         self.library_page.mark_playing(song.get("video_id", ""))
@@ -602,6 +692,12 @@ class MainWindow(QMainWindow):
             elif job and video_id in self.downloads.rows:
                 self.downloads.rows[video_id].update_job(job)
 
+    def _on_download_transfer(self, percent: int, speed: int, eta: int) -> None:
+        if self._active_result:
+            self.downloads.update_transfer(
+                self._active_result.video_id, percent, speed, eta
+            )
+
     def _on_download_finished(self, file_path: str):
         result = self._active_result
         self._active_result = None
@@ -625,12 +721,13 @@ class MainWindow(QMainWindow):
     def _on_download_failed(self, message: str):
         result = self._active_result
         self._active_result = None
+        reason = explain_download_error(message)
         if result:
-            self.download_state.set_status(result.video_id, "failed", message)
+            self.download_state.set_status(result.video_id, "failed", reason)
         self.downloads.set_jobs(self.download_state.jobs)
         self.toast_manager.show_toast(
             "Download failed",
-            f"{result.title if result else 'track'} · {message or 'check your connection and try again.'}",
+            f"{result.title if result else 'track'} · {reason}",
             "error",
         )
         QTimer.singleShot(0, self._start_next_download)

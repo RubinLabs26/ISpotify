@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from core.download_state import DownloadState, result_from_job
-from core.downloader import DownloadCancelled, DownloadTask
+from core.downloader import DownloadCancelled, DownloadTask, explain_download_error
 from core import downloader as downloader_module
 from core.searcher import PlaylistResult, PlaylistTrack, SearchResult
 
@@ -94,6 +94,23 @@ class DownloadStateTests(unittest.TestCase):
             downloader_module.DOWNLOAD_DIR = original
         self.assertFalse(matching.exists())
         self.assertTrue(other.exists())
+
+    def test_download_failures_offer_a_useful_retry_action(self):
+        self.assertIn(
+            "cookies in Settings",
+            explain_download_error("Sign in to confirm you are not a bot"),
+        )
+        self.assertIn("network", explain_download_error("Connection timed out"))
+
+    def test_download_hook_reports_speed_and_eta(self):
+        task = DownloadTask("abcdefghijk", "Track")
+        transfers = []
+        task.signals.transfer.connect(lambda *values: transfers.append(values))
+        task._progress_hook({
+            "status": "downloading", "total_bytes": 100,
+            "downloaded_bytes": 50, "speed": 2048.7, "eta": 12.9,
+        })
+        self.assertEqual(transfers, [(50, 2048, 12)])
 
 
 if __name__ == "__main__":
