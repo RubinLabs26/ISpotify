@@ -12,10 +12,10 @@ from core.version import APP_VERSION
 class UpdaterTests(unittest.TestCase):
     def test_only_newer_stable_versions_are_offered(self):
         self.assertEqual(version_tuple("v19.1.2"), (19, 1, 2))
-        self.assertTrue(is_newer("v19.2.2", APP_VERSION))
-        self.assertFalse(is_newer("v19.2.1", APP_VERSION))
+        self.assertTrue(is_newer("v19.2.3", APP_VERSION))
+        self.assertFalse(is_newer("v19.2.2", APP_VERSION))
         self.assertFalse(is_newer("v19.1.1", APP_VERSION))
-        self.assertFalse(is_newer("v19.2.1-rc1", APP_VERSION))
+        self.assertFalse(is_newer("v19.2.2-rc1", APP_VERSION))
 
     def test_download_requires_trusted_release_url_and_digest(self):
         trusted = {

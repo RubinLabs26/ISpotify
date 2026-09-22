@@ -276,20 +276,10 @@ class SettingsTab(QWidget):
     def open_discord_authorization(self, url: str) -> None:
         self._discord_authorization_url = url
         self.discord_auth_panel.show()
-        opened = QDesktopServices.openUrl(QUrl(url))
-        if opened:
-            self.discord_auth_help.setText(
-                "Discord authorization opened in your browser. If it did not "
-                "appear, open or copy the link."
-            )
-        else:
-            self.discord_auth_help.setText(
-                "The browser could not be opened. Copy the authorization link "
-                "and paste it into a browser."
-            )
-            self.discordStatusChanged.emit(
-                "warning::Could not open a browser. Use Copy link to continue."
-            )
+        self.discord_auth_help.setText(
+            "Discord will open authorization in your browser. If it does not "
+            "appear, use Open link or Copy link."
+        )
 
     def _open_discord_link(self) -> None:
         if not self._discord_authorization_url:

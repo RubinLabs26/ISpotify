@@ -34,6 +34,10 @@ class DiscordPresenceTests(unittest.TestCase):
             _friendly_login_error('OAuth2 Error: Missing "redirect_uri"'),
         )
         self.assertIn(
+            str(APPLICATION_ID),
+            _friendly_login_error("OAuth2 Error: invalid redirect uri"),
+        )
+        self.assertIn(
             "Public Client",
             _friendly_login_error("OAuth2 Error: invalid_client"),
         )

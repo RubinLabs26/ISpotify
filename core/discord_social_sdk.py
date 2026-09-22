@@ -55,10 +55,10 @@ def _copy_string(value: DiscordString) -> str:
 
 def _friendly_login_error(message: str) -> str:
     lowered = message.lower()
-    if "redirect_uri" in lowered:
+    if "redirect_uri" in lowered or "redirect uri" in lowered:
         return (
-            "Discord setup required: add http://127.0.0.1/callback "
-            "as an OAuth2 redirect URL"
+            "Discord rejected the redirect. In application 1551266524839411752, "
+            "save http://127.0.0.1/callback under OAuth2 > Redirects."
         )
     if "invalid_client" in lowered:
         return "Discord setup required: enable Public Client on the OAuth2 page"
@@ -477,10 +477,6 @@ class DiscordSocialClient:
             self.lib.Discord_AuthorizationArgs_SetCodeChallenge(
                 ctypes.byref(args), ctypes.byref(challenge)
             )
-            self.on_authorization_url(
-                authorization_url(scopes_text, challenge_text, state_text)
-            )
-
             @self._remember
             @self.AuthorizationCallback
             def authorized(result, code, redirect_uri, _user_data):
@@ -501,6 +497,9 @@ class DiscordSocialClient:
                 authorized,
                 None,
                 None,
+            )
+            self.on_authorization_url(
+                authorization_url(scopes_text, challenge_text, state_text)
             )
             del scopes_buffer, state_buffer
         finally:
