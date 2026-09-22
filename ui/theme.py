@@ -1,11 +1,4 @@
-"""iSpotify's visual system.
-
-A quiet, near-monochrome palette in the spirit of a hand-tuned Wayland
-compositor theme: one background, a handful of tonal surfaces, soft
-low-alpha borders, and a single warm-white accent used sparingly. Colour
-is not used to carry meaning on its own -- weight, spacing and opacity do
-most of the work, so the accent stays rare and therefore legible.
-"""
+"""iSpotify's Caelestia-inspired Material You visual system."""
 
 from pathlib import Path
 
@@ -13,29 +6,31 @@ from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 
 
 COLORS = {
-    "background": "#0c0c0d",
-    "surface": "#131314",
-    "surface_raised": "#19191b",
-    "surface_hover": "#212123",
-    "surface_active": "#28282a",
-    "border": "rgba(255, 255, 255, 0.06)",
-    "border_bright": "rgba(255, 255, 255, 0.14)",
-    "text": "#e9e9ea",
-    "text_secondary": "#9c9c9f",
-    "text_muted": "#7d7d81",  # 4.8:1 on the background (was 3.5:1)
-    "accent": "#f2f1ec",
-    "accent_press": "#cfcec7",
-    "accent_text": "#101010",
-    "accent_wash": "rgba(242, 241, 236, 0.10)",
-    "accent_soft": "rgba(242, 241, 236, 0.22)",
-    "scroll": "rgba(255, 255, 255, 0.18)",
-    "scroll_hover": "rgba(255, 255, 255, 0.30)",
-    "scroll_press": "rgba(255, 255, 255, 0.42)",
-    "danger": "#d99a95",
-    "danger_wash": "rgba(217, 154, 149, 0.12)",
-    "success": "#a7c9a8",
-    "warning": "#d3bd8a",
-    "info": "#9fb2c9",
+    "background": "#090910",
+    "surface": "#13121c",
+    "surface_raised": "#1c1a28",
+    "surface_hover": "#282538",
+    "surface_active": "#343047",
+    "border": "rgba(222, 216, 255, 0.08)",
+    "border_bright": "rgba(222, 216, 255, 0.20)",
+    "text": "#e8e1f2",
+    "text_secondary": "#c9c1d7",
+    "text_muted": "#978fa7",
+    "accent": "#cfbdff",
+    "accent_press": "#b39ee9",
+    "accent_text": "#24163f",
+    "accent_wash": "rgba(207, 189, 255, 0.12)",
+    "accent_soft": "rgba(207, 189, 255, 0.28)",
+    "secondary": "#a9c7ff",
+    "secondary_wash": "rgba(169, 199, 255, 0.12)",
+    "scroll": "rgba(207, 189, 255, 0.22)",
+    "scroll_hover": "rgba(207, 189, 255, 0.38)",
+    "scroll_press": "rgba(207, 189, 255, 0.52)",
+    "danger": "#ffb4ab",
+    "danger_wash": "rgba(255, 180, 171, 0.13)",
+    "success": "#a9d6b2",
+    "warning": "#e8c77b",
+    "info": "#a9c7ff",
 }
 
 
@@ -44,7 +39,7 @@ def install_theme(app) -> None:
     font_family = next(
         (
             family for family in (
-                "Inter", "Manrope", "Avenir Next",
+                "Google Sans Flex", "Rubik", "Inter", "Manrope", "Avenir Next",
                 "Plus Jakarta Sans", "Segoe UI", "Noto Sans", "DejaVu Sans",
             )
             if family in available_fonts
@@ -78,9 +73,13 @@ def install_theme(app) -> None:
             selection-background-color: {COLORS["accent_soft"]};
             selection-color: {COLORS["text"]};
         }}
-        QMainWindow, QWidget#appRoot, QScrollArea,
-        QScrollArea > QWidget > QWidget {{
-            background: {COLORS["background"]};
+        QMainWindow, QWidget#appRoot {{
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #090910, stop:0.55 #0d0c16, stop:1 #151124);
+            border: none;
+        }}
+        QScrollArea, QScrollArea > QWidget > QWidget {{
+            background: transparent;
             border: none;
         }}
         QToolTip {{
@@ -160,13 +159,34 @@ def install_theme(app) -> None:
 
         /* ---------- structure ---------- */
         QFrame#sidebar {{
-            background: {COLORS["background"]};
-            border-right: 1px solid {COLORS["border"]};
+            background: rgba(24, 22, 35, 0.96);
+            border: 1px solid {COLORS["border"]};
+            border-radius: 22px;
+        }}
+        QLabel#experimentalBadge {{
+            color: {COLORS["accent_text"]};
+            background: {COLORS["accent"]};
+            border: none;
+            border-radius: 7px;
+            padding: 2px 6px;
+            font-size: 7pt;
+            font-weight: 700;
+            letter-spacing: 0.7px;
+        }}
+        QFrame#navIndicator {{
+            background: {COLORS["accent"]};
+            border: none;
+            border-radius: 2px;
+        }}
+        QWidget#contentSurface {{
+            background: rgba(16, 15, 25, 0.94);
+            border: 1px solid {COLORS["border"]};
+            border-radius: 24px;
         }}
         QFrame#card {{
-            background: {COLORS["surface"]};
+            background: rgba(28, 26, 40, 0.92);
             border: 1px solid {COLORS["border"]};
-            border-radius: 14px;
+            border-radius: 18px;
         }}
         QFrame#card:hover {{
             border-color: {COLORS["border_bright"]};
@@ -174,14 +194,14 @@ def install_theme(app) -> None:
         }}
         QFrame#hero {{
             background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                stop:0 {COLORS["surface_raised"]}, stop:1 {COLORS["surface"]});
-            border: 1px solid {COLORS["border"]};
-            border-radius: 18px;
+                stop:0 #32294d, stop:0.48 #211c35, stop:1 #181623);
+            border: 1px solid {COLORS["accent_soft"]};
+            border-radius: 24px;
         }}
         QWidget#player {{
-            background: {COLORS["surface"]};
-            border-top: 1px solid {COLORS["border"]};
-            border-radius: 0;
+            background: rgba(28, 26, 40, 0.96);
+            border: 1px solid {COLORS["border_bright"]};
+            border-radius: 22px;
         }}
         QScrollArea#settingsScroll,
         QScrollArea#settingsScroll > QWidget > QWidget {{
@@ -294,12 +314,12 @@ def install_theme(app) -> None:
             font-weight: 600;
         }}
         QPushButton#accentButton:hover {{
-            background: #ffffff;
-            border-color: #ffffff;
+            background: #dfd2ff;
+            border-color: #dfd2ff;
         }}
         QPushButton#accentButton:focus {{
-            background: #ffffff;
-            border-color: #ffffff;
+            background: #dfd2ff;
+            border-color: #dfd2ff;
         }}
         QPushButton#accentButton:pressed {{
             background: {COLORS["accent_press"]};
@@ -410,12 +430,12 @@ def install_theme(app) -> None:
             border: 1px solid {COLORS["accent"]};
         }}
         QPushButton#playButton:hover {{
-            background: #ffffff;
-            border-color: #ffffff;
+            background: #dfd2ff;
+            border-color: #dfd2ff;
         }}
         QPushButton#playButton:focus {{
-            background: #ffffff;
-            border-color: #ffffff;
+            background: #dfd2ff;
+            border-color: #dfd2ff;
         }}
         QPushButton#playButton:pressed {{
             background: {COLORS["accent_press"]};
@@ -459,9 +479,9 @@ def install_theme(app) -> None:
             color: {COLORS["text"]};
         }}
         QPushButton#navButton:checked {{
-            background: {COLORS["surface_raised"]};
-            border-color: {COLORS["border"]};
-            color: {COLORS["text"]};
+            background: {COLORS["accent_wash"]};
+            border-color: {COLORS["accent_soft"]};
+            color: {COLORS["accent"]};
             font-weight: 600;
         }}
 
@@ -637,11 +657,11 @@ def install_theme(app) -> None:
             border-radius: 2px;
         }}
         QSlider::sub-page:horizontal {{
-            background: {COLORS["text"]};
+            background: {COLORS["accent"]};
             border-radius: 2px;
         }}
         QSlider::handle:horizontal {{
-            background: {COLORS["text"]};
+            background: {COLORS["accent"]};
             width: 11px;
             height: 11px;
             margin: -4px 0;
@@ -682,11 +702,11 @@ def install_theme(app) -> None:
             max-height: 8px;
         }}
         QProgressBar#downloadProgress::chunk {{
-            background: {COLORS["text"]};
+            background: {COLORS["accent"]};
             border-radius: 4px;
         }}
         QProgressBar::chunk {{
-            background: {COLORS["text"]};
+            background: {COLORS["accent"]};
             border-radius: 4px;
         }}
         """

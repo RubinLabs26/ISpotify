@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QProcess, QPropertyAnimation, QTimer, QSize, Qt, QUrl
+from PySide6.QtCore import (
+    QEasingCurve, QProcess, QPropertyAnimation, QRect, QTimer, QSize, Qt, QUrl,
+)
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtWidgets import QApplication, QGraphicsOpacityEffect, QMessageBox
@@ -33,7 +35,7 @@ from ui.widgets import MotionButton, icon_button, standard_icon
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("iSpotify")
+        self.setWindowTitle("iSpotify Experimental")
         self.setMinimumSize(840, 580)
         self.resize(1100, 720)
         self.library = Library()
@@ -46,6 +48,7 @@ class MainWindow(QMainWindow):
         self._nav_buttons = []
         self._page_history = []
         self._current_page = None
+        self._entrance_played = False
         self._playlist_contexts = self.download_state.playlist_contexts()
         for job in list(self.download_state.jobs):
             if self.library.find(job["video_id"]):
@@ -73,17 +76,19 @@ class MainWindow(QMainWindow):
         root = QWidget()
         root.setObjectName("appRoot")
         root_layout = QHBoxLayout(root)
-        root_layout.setContentsMargins(0, 0, 0, 0)
-        root_layout.setSpacing(0)
+        root_layout.setContentsMargins(12, 12, 12, 12)
+        root_layout.setSpacing(12)
         self.sidebar = self._build_sidebar()
         root_layout.addWidget(self.sidebar)
 
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(0)
+        content_layout.setSpacing(12)
 
         page_wrap = QWidget()
+        page_wrap.setObjectName("contentSurface")
+        page_wrap.setAttribute(Qt.WA_StyledBackground, True)
         page_layout = QVBoxLayout(page_wrap)
         page_layout.setContentsMargins(30, 26, 30, 16)
         page_layout.setSpacing(18)
@@ -115,8 +120,8 @@ class MainWindow(QMainWindow):
         self._pages_fade = QPropertyAnimation(
             self._pages_opacity, b"opacity", self
         )
-        self._pages_fade.setDuration(180)
-        self._pages_fade.setEasingCurve(QEasingCurve.OutQuint)
+        self._pages_fade.setDuration(320)
+        self._pages_fade.setEasingCurve(QEasingCurve.OutCubic)
         self._pages_opacity.setOpacity(1.0)
         self.home = HomeTab(self.library)
         self.search = SearchTab()
@@ -138,19 +143,23 @@ class MainWindow(QMainWindow):
     def _build_sidebar(self):
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(200)
+        sidebar.setFixedWidth(216)
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(20, 24, 20, 18)
         layout.setSpacing(4)
         brand_row = QHBoxLayout()
         brand_row.setSpacing(8)
         mark = QLabel("●")
-        mark.setStyleSheet("color: #f2f1ec; font-size: 10pt;")
+        mark.setStyleSheet("color: #cfbdff; font-size: 10pt;")
         mark.setFixedWidth(14)
         brand = QLabel("iSpotify")
         brand.setObjectName("brand")
         brand_row.addWidget(mark)
         brand_row.addWidget(brand)
+        experimental = QLabel("LAB")
+        experimental.setObjectName("experimentalBadge")
+        experimental.setToolTip("Experimental Caelestia interface build")
+        brand_row.addWidget(experimental)
         brand_row.addStretch()
         layout.addLayout(brand_row)
         layout.addSpacing(28)
@@ -170,6 +179,16 @@ class MainWindow(QMainWindow):
             button.clicked.connect(lambda _checked=False, page=key: self.navigate(page))
             self._nav_buttons.append((key, button))
             layout.addWidget(button)
+        self._nav_indicator = QFrame(sidebar)
+        self._nav_indicator.setObjectName("navIndicator")
+        self._nav_indicator.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._nav_indicator.setGeometry(10, 0, 4, 24)
+        self._nav_indicator.raise_()
+        self._nav_indicator_motion = QPropertyAnimation(
+            self._nav_indicator, b"geometry", self
+        )
+        self._nav_indicator_motion.setDuration(340)
+        self._nav_indicator_motion.setEasingCurve(QEasingCurve.OutBack)
         layout.addStretch()
         footer = QLabel("© Rubin Labs")
         footer.setObjectName("muted")
@@ -389,15 +408,43 @@ class MainWindow(QMainWindow):
         self.pages.setCurrentWidget(widget)
         if self._current_page != page:
             self._pages_fade.stop()
-            self._pages_fade.setStartValue(0.82)
+            self._pages_fade.setStartValue(0.0)
             self._pages_fade.setEndValue(1.0)
             self._pages_fade.start()
         self.page_title.setText(title)
         self.page_subtitle.setText(subtitle)
         for key, button in self._nav_buttons:
             button.setChecked(key == page)
+            if key == page:
+                self._move_nav_indicator(button)
         self._current_page = page
         self._update_back_button()
+
+    def _move_nav_indicator(self, button) -> None:
+        target = QRect(10, button.y() + max(0, (button.height() - 24) // 2), 4, 24)
+        self._nav_indicator_motion.stop()
+        self._nav_indicator_motion.setStartValue(self._nav_indicator.geometry())
+        self._nav_indicator_motion.setEndValue(target)
+        self._nav_indicator_motion.start()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._entrance_played:
+            return
+        self._entrance_played = True
+        if QApplication.platformName() != "offscreen":
+            self.setWindowOpacity(0.0)
+            self._window_entrance = QPropertyAnimation(self, b"windowOpacity", self)
+            self._window_entrance.setDuration(420)
+            self._window_entrance.setStartValue(0.0)
+            self._window_entrance.setEndValue(1.0)
+            self._window_entrance.setEasingCurve(QEasingCurve.OutCubic)
+            self._window_entrance.start()
+        QTimer.singleShot(
+            0, lambda: self._move_nav_indicator(
+                next(button for key, button in self._nav_buttons if key == self._current_page)
+            )
+        )
 
     def _go_back(self):
         if self._current_page == "search" and self.search.go_back():

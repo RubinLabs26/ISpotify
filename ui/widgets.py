@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QSize, Qt, QUrl
+from PySide6.QtCore import (
+    QAbstractAnimation, QEasingCurve, QEvent, QPropertyAnimation, QSize, Qt, QUrl,
+)
 from PySide6.QtGui import QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (
@@ -108,16 +110,46 @@ def thumbnail_pixmap(source: QPixmap, size: QSize) -> QPixmap:
 
 
 class MotionButton(QPushButton):
-    """A stable button base with reliable native click delivery.
-
-    Motion is intentionally kept in the shared QSS and screen transitions.
-    Applying a graphics effect directly to every button caused hover repaint
-    glitches on some Qt/Wayland combinations and could swallow release events.
-    """
+    """Button with lightweight icon motion that keeps native click delivery."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setCursor(Qt.PointingHandCursor)
+        self._resting_icon_size = self.iconSize()
+        self._icon_motion = QPropertyAnimation(self, b"iconSize", self)
+        self._icon_motion.setDuration(180)
+        self._icon_motion.setEasingCurve(QEasingCurve.OutCubic)
+
+    def _animate_icon(self, delta: int) -> None:
+        if self.icon().isNull():
+            return
+        base = self._resting_icon_size
+        target = QSize(max(1, base.width() + delta), max(1, base.height() + delta))
+        self._icon_motion.stop()
+        self._icon_motion.setStartValue(self.iconSize())
+        self._icon_motion.setEndValue(target)
+        self._icon_motion.start()
+
+    def setIconSize(self, size: QSize) -> None:
+        super().setIconSize(size)
+        if not hasattr(self, "_icon_motion") or self._icon_motion.state() == QAbstractAnimation.Stopped:
+            self._resting_icon_size = size
+
+    def enterEvent(self, event):
+        self._animate_icon(2)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._animate_icon(0)
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        self._animate_icon(-1)
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._animate_icon(2 if self.underMouse() else 0)
+        super().mouseReleaseEvent(event)
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -158,7 +190,7 @@ class ArtworkLabel(QLabel):
         self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet(
             "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 #1d1d20, stop:1 #151517); "
+            "stop:0 #302a46, stop:0.55 #211d32, stop:1 #171522); "
             f"border: 1px solid {COLORS['border']}; "
             "border-radius: 9px; padding: 0px;"
         )

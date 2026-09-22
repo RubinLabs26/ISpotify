@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QTimer, QUrl, Qt, Signal, QSize
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, QUrl, Qt, Signal, QSize
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtMultimedia import QAudioOutput, QMediaDevices, QMediaPlayer
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget,
+    QGraphicsOpacityEffect, QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget,
 )
 
 from ui.widgets import ArtworkLabel, MotionButton, format_duration, icon_button, standard_icon
@@ -46,6 +46,14 @@ class PlayerWidget(QWidget):
         layout.setSpacing(12)
         root.addLayout(layout)
         self.artwork = ArtworkLabel("iSpotify", QSize(46, 46))
+        self._artwork_opacity = QGraphicsOpacityEffect(self.artwork)
+        self.artwork.setGraphicsEffect(self._artwork_opacity)
+        self._artwork_opacity.setOpacity(1.0)
+        self._artwork_reveal = QPropertyAnimation(
+            self._artwork_opacity, b"opacity", self
+        )
+        self._artwork_reveal.setDuration(360)
+        self._artwork_reveal.setEasingCurve(QEasingCurve.OutCubic)
         layout.addWidget(self.artwork)
         info = QVBoxLayout()
         info.setSpacing(1)
@@ -166,6 +174,10 @@ class PlayerWidget(QWidget):
         self._elide(self.artist_label, song.get("channel", "Unknown artist"), 168)
         self.artwork.title = song.get("title", "iSpotify")
         self.artwork.set_thumbnail(song.get("thumbnail_url", ""))
+        self._artwork_reveal.stop()
+        self._artwork_reveal.setStartValue(0.15)
+        self._artwork_reveal.setEndValue(1.0)
+        self._artwork_reveal.start()
         # Explicitly release the previous FFmpeg decoder before replacing it.
         # Without this, rapidly switching between downloaded MP3s can leave
         # two decoders alive and crash some Qt FFmpeg builds on Linux.

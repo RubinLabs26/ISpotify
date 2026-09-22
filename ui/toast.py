@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import (
-    QEasingCurve, QPropertyAnimation, QTimer, Qt,
+    QEasingCurve, QParallelAnimationGroup, QPropertyAnimation, QTimer, Qt,
 )
 from PySide6.QtWidgets import (
     QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QVBoxLayout, QWidget,
@@ -24,7 +24,7 @@ class Toast(QFrame):
         }.get(kind, COLORS["text_secondary"])
         self.setStyleSheet(
             f"""QFrame#toast {{
-                background: #17171a;
+                background: #211e30;
                 border: 1px solid {COLORS["border_bright"]};
                 border-radius: 12px;
             }} QFrame#toastBar {{
@@ -87,13 +87,24 @@ class ToastManager(QWidget):
         toast.setGraphicsEffect(effect)
         effect.setOpacity(0.0)
         self.layout.addWidget(toast, 0, Qt.AlignRight)
+        toast.adjustSize()
+        target_height = toast.sizeHint().height()
+        toast.setMaximumHeight(0)
         fade_in = QPropertyAnimation(effect, b"opacity", toast)
-        fade_in.setDuration(220)
+        fade_in.setDuration(280)
         fade_in.setStartValue(0.0)
         fade_in.setEndValue(1.0)
-        fade_in.setEasingCurve(QEasingCurve.OutQuint)
-        fade_in.start()
-        self._animations[toast] = fade_in
+        fade_in.setEasingCurve(QEasingCurve.OutCubic)
+        expand = QPropertyAnimation(toast, b"maximumHeight", toast)
+        expand.setDuration(320)
+        expand.setStartValue(0)
+        expand.setEndValue(target_height)
+        expand.setEasingCurve(QEasingCurve.OutBack)
+        motion = QParallelAnimationGroup(toast)
+        motion.addAnimation(fade_in)
+        motion.addAnimation(expand)
+        motion.start()
+        self._animations[toast] = motion
         QTimer.singleShot(timeout, lambda: self._dismiss(toast))
 
     def _remove_current(self):
@@ -122,9 +133,17 @@ class ToastManager(QWidget):
         fade_out.setStartValue(1.0)
         fade_out.setEndValue(0.0)
         fade_out.setEasingCurve(QEasingCurve.InQuad)
-        fade_out.finished.connect(lambda: self._finish(toast))
-        self._animations[toast] = fade_out
-        fade_out.start()
+        collapse = QPropertyAnimation(toast, b"maximumHeight", toast)
+        collapse.setDuration(240)
+        collapse.setStartValue(toast.height())
+        collapse.setEndValue(0)
+        collapse.setEasingCurve(QEasingCurve.InCubic)
+        motion = QParallelAnimationGroup(toast)
+        motion.addAnimation(fade_out)
+        motion.addAnimation(collapse)
+        motion.finished.connect(lambda: self._finish(toast))
+        self._animations[toast] = motion
+        motion.start()
 
     def _finish(self, toast):
         self._animations.pop(toast, None)
