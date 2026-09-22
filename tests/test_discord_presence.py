@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
+from urllib.request import urlopen
 
 from core.discord_presence import (
     DEFAULT_APPLICATION_ID,
@@ -11,6 +13,7 @@ from core.discord_presence import (
 from core.discord_social_sdk import (
     APPLICATION_ID,
     DESKTOP_REDIRECT_URI,
+    OAuthCallbackServer,
     TokenStore,
     _friendly_login_error,
     authorization_url,
@@ -54,6 +57,33 @@ class DiscordPresenceTests(unittest.TestCase):
         self.assertEqual(query["state"], ["state"])
         self.assertEqual(query["code_challenge"], ["challenge"])
         self.assertEqual(query["code_challenge_method"], ["S256"])
+
+    def test_loopback_server_receives_and_validates_browser_callback(self):
+        callback = OAuthCallbackServer(
+            "http://127.0.0.1:0/callback", "expected-state"
+        )
+        callback.start()
+        try:
+            with self.assertRaises(HTTPError) as invalid:
+                urlopen(
+                    f"http://127.0.0.1:{callback.port}/callback"
+                    "?code=wrong&state=unexpected",
+                    timeout=2,
+                )
+            self.assertEqual(invalid.exception.code, 400)
+            invalid.exception.close()
+            self.assertIsNone(callback.poll())
+
+            with urlopen(
+                f"http://127.0.0.1:{callback.port}/callback"
+                "?code=discord-code&state=expected-state",
+                timeout=2,
+            ) as response:
+                page = response.read().decode("utf-8")
+            self.assertIn("connected to iSpotify", page)
+            self.assertEqual(callback.poll(), ("discord-code", ""))
+        finally:
+            callback.stop()
 
     @patch("core.discord_presence.time.time", return_value=2_000)
     def test_builds_listening_activity_with_elapsed_time(self, _time):
