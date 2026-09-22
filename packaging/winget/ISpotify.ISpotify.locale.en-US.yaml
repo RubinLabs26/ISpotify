@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 
 PackageIdentifier: ISpotify.ISpotify
-PackageVersion: 19.2.2
+PackageVersion: 19.3.0
 PackageLocale: en-US
 Publisher: ISpotify
 PublisherUrl: https://github.com/RubinLabs26
@@ -19,9 +19,9 @@ Tags:
   - music
   - player
 ReleaseNotes: |-
-  Fixes restart after automatic updates in packaged builds.
-  Plays saved music sequentially from the library and removes Up Next.
-  Lets the Discord SDK handle browser authorization before showing manual fallback links.
-ReleaseNotesUrl: https://github.com/RubinLabs26/ISpotify/releases/tag/v19.2.2
+  Introduces a polished monochrome desktop interface with consistent spacing, corner radii, and motion.
+  Adds refined player depth, clearer active navigation, improved card layouts, and native playlist action icons.
+  Preserves automatic updates, Discord Rich Presence, sequential library playback, playlists, and downloads.
+ReleaseNotesUrl: https://github.com/RubinLabs26/ISpotify/releases/tag/v19.3.0
 ManifestType: defaultLocale
 ManifestVersion: 1.12.0
