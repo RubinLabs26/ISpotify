@@ -7,7 +7,11 @@ from PySide6.QtWidgets import (
     QGraphicsOpacityEffect, QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget,
 )
 
-from ui.widgets import ArtworkLabel, MotionButton, format_duration, icon_button, standard_icon
+from ui.theme import SPACE
+from ui.widgets import (
+    ArtworkLabel, MotionButton, format_duration, icon_button, soft_shadow,
+    standard_icon,
+)
 from core.audio_devices import (
     classify_audio_output,
     headphones_were_disconnected,
@@ -38,12 +42,15 @@ class PlayerWidget(QWidget):
         self.player.setAudioOutput(self.audio_output)
         self.audio_output.setVolume(0.7)
 
+        # Lift the persistent transport above the changing page content.
+        self._shadow = soft_shadow(self, blur=32, y=-6, alpha=90)
+
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
         layout = QHBoxLayout()
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(SPACE[4], 14, SPACE[4], 14)
+        layout.setSpacing(14)
         root.addLayout(layout)
         self.artwork = ArtworkLabel("iSpotify", QSize(46, 46))
         self._artwork_opacity = QGraphicsOpacityEffect(self.artwork)

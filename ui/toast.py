@@ -24,7 +24,7 @@ class Toast(QFrame):
         }.get(kind, COLORS["text_secondary"])
         self.setStyleSheet(
             f"""QFrame#toast {{
-                background: #211e30;
+                background: {COLORS["surface_raised"]};
                 border: 1px solid {COLORS["border_bright"]};
                 border-radius: 12px;
             }} QFrame#toastBar {{

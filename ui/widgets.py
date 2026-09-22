@@ -8,13 +8,24 @@ from pathlib import Path
 from PySide6.QtCore import (
     QAbstractAnimation, QEasingCurve, QEvent, QPropertyAnimation, QSize, Qt, QUrl,
 )
-from PySide6.QtGui import QIcon, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (
-    QApplication, QLabel, QPushButton, QSizePolicy, QStyle,
+    QApplication, QGraphicsDropShadowEffect, QLabel, QPushButton, QSizePolicy,
+    QStyle,
 )
 
-from ui.theme import COLORS
+from ui.theme import COLORS, EASING, MOTION
+
+
+def soft_shadow(widget, *, blur: int = 28, y: int = 6, alpha: int = 115):
+    """Attach a cross-platform soft shadow to one raised surface."""
+    effect = QGraphicsDropShadowEffect(widget)
+    effect.setBlurRadius(blur)
+    effect.setOffset(0, y)
+    effect.setColor(QColor(0, 0, 0, alpha))
+    widget.setGraphicsEffect(effect)
+    return effect
 
 
 PLAYLIST_GRADIENTS = (
@@ -117,8 +128,8 @@ class MotionButton(QPushButton):
         self.setCursor(Qt.PointingHandCursor)
         self._resting_icon_size = self.iconSize()
         self._icon_motion = QPropertyAnimation(self, b"iconSize", self)
-        self._icon_motion.setDuration(180)
-        self._icon_motion.setEasingCurve(QEasingCurve.OutCubic)
+        self._icon_motion.setDuration(MOTION["base"])
+        self._icon_motion.setEasingCurve(EASING["standard"])
 
     def _animate_icon(self, delta: int) -> None:
         if self.icon().isNull():

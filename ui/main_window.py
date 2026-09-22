@@ -106,7 +106,7 @@ class MainWindow(QMainWindow):
         self.page_subtitle.setObjectName("pageSubtitle")
         title_box.addWidget(self.page_title)
         title_box.addWidget(self.page_subtitle)
-        self.header.addLayout(title_box)
+        self.header.addLayout(title_box, 1)
         self.header.addStretch()
         self.update_button = MotionButton("Update available")
         self.update_button.setObjectName("accentButton")

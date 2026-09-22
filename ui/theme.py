@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from PySide6.QtCore import QEasingCurve
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 
 
@@ -31,6 +32,19 @@ COLORS = {
     "success": "#a9d6b2",
     "warning": "#e8c77b",
     "info": "#a9c7ff",
+    "shadow": "rgba(0, 0, 0, 0.45)",
+}
+
+
+# Shared design tokens keep spacing, corners, and motion consistent across
+# the desktop UI while remaining simple values that are safe to use in QSS.
+SPACE = {1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 7: 32, 8: 40}
+RADIUS = {"sm": 8, "md": 12, "lg": 16, "pill": 999}
+MOTION = {"fast": 120, "base": 180, "slow": 260}
+EASING = {
+    "standard": QEasingCurve.OutCubic,
+    "emphasis": QEasingCurve.OutQuint,
+    "exit": QEasingCurve.InOutCubic,
 }
 
 
