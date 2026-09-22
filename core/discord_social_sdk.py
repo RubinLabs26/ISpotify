@@ -10,12 +10,17 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import queue
 import secrets
 import sys
+import threading
 import time
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from html import escape
 from pathlib import Path
 from typing import Callable
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 import keyring
 
@@ -30,6 +35,119 @@ DESKTOP_REDIRECT_URI = "http://127.0.0.1/callback"
 
 class DiscordSdkError(RuntimeError):
     pass
+
+
+class OAuthCallbackServer:
+    """Receive one Discord OAuth redirect on the registered loopback URI."""
+
+    def __init__(self, redirect_uri: str, expected_state: str):
+        parsed = urlsplit(redirect_uri)
+        if parsed.scheme != "http" or parsed.hostname not in {
+            "127.0.0.1",
+            "localhost",
+        }:
+            raise ValueError("Discord OAuth requires an HTTP loopback redirect")
+        self.host = parsed.hostname
+        self.port = parsed.port if parsed.port is not None else 80
+        self.path = parsed.path or "/"
+        self.expected_state = expected_state
+        self._results: queue.Queue[tuple[str, str]] = queue.Queue(maxsize=1)
+        self._server: ThreadingHTTPServer | None = None
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        callback = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802 - stdlib callback name
+                request = urlsplit(self.path)
+                if request.path != callback.path:
+                    self._reply(
+                        HTTPStatus.NOT_FOUND,
+                        "This is not an iSpotify authorization callback.",
+                    )
+                    return
+                values = parse_qs(request.query)
+                if values.get("state", [""])[0] != callback.expected_state:
+                    self._reply(
+                        HTTPStatus.BAD_REQUEST,
+                        "The authorization state did not match. Return to iSpotify and try again.",
+                    )
+                    return
+                error = values.get("error_description", values.get("error", [""]))[0]
+                code = values.get("code", [""])[0]
+                if error:
+                    callback._submit("", error)
+                    self._reply(
+                        HTTPStatus.OK,
+                        "Discord authorization was cancelled. You can close this tab.",
+                    )
+                elif code:
+                    callback._submit(code, "")
+                    self._reply(
+                        HTTPStatus.OK,
+                        "Discord is connected to iSpotify. You can close this tab and return to the app.",
+                    )
+                else:
+                    self._reply(
+                        HTTPStatus.BAD_REQUEST,
+                        "Discord did not provide an authorization code. Return to iSpotify and try again.",
+                    )
+
+            def _reply(self, status: HTTPStatus, message: str) -> None:
+                body = (
+                    "<!doctype html><html><head><meta charset='utf-8'>"
+                    "<meta name='viewport' content='width=device-width'>"
+                    "<title>iSpotify Discord</title></head>"
+                    "<body style='margin:0;background:#090909;color:#fff;"
+                    "font:16px system-ui;display:grid;place-items:center;min-height:100vh'>"
+                    f"<main style='max-width:520px;padding:32px;text-align:center'>"
+                    f"<h1>iSpotify</h1><p>{escape(message)}</p></main></body></html>"
+                ).encode("utf-8")
+                self.send_response(status)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, _format: str, *_args) -> None:
+                return
+
+        class Server(ThreadingHTTPServer):
+            allow_reuse_address = True
+            daemon_threads = True
+
+        self._server = Server((self.host, self.port), Handler)
+        self.port = int(self._server.server_port)
+        self._thread = threading.Thread(
+            target=self._server.serve_forever,
+            name="discord-oauth-callback",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _submit(self, code: str, error: str) -> None:
+        try:
+            self._results.put_nowait((code, error))
+        except queue.Full:
+            pass
+
+    def poll(self) -> tuple[str, str] | None:
+        try:
+            return self._results.get_nowait()
+        except queue.Empty:
+            return None
+
+    def stop(self) -> None:
+        server, thread = self._server, self._thread
+        self._server = None
+        self._thread = None
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=2)
 
 
 class DiscordString(ctypes.Structure):
@@ -164,7 +282,10 @@ class DiscordSocialClient:
         self._access_token = ""
         self._refresh_token = ""
         self._authorizing = False
+        self._oauth_exchange_pending = False
         self._closed = False
+        self._oauth_callback: OAuthCallbackServer | None = None
+        self._browser_verifier = ""
 
         path = sdk_library_path()
         if sys.platform == "win32":
@@ -399,7 +520,11 @@ class DiscordSocialClient:
         @self._remember
         @self.VoidCallback
         def authorization_closed(_user_data):
-            if self._authorizing:
+            if (
+                self._authorizing
+                and self._oauth_callback is None
+                and not self._oauth_exchange_pending
+            ):
                 self._authorizing = False
                 self.on_account(False, "Discord authorization was cancelled")
 
@@ -437,9 +562,36 @@ class DiscordSocialClient:
     def run_callbacks(self) -> None:
         if not self._closed:
             self.lib.Discord_RunCallbacks()
+            callback = self._oauth_callback
+            result = callback.poll() if callback is not None else None
+            if result is not None:
+                code, error = result
+                verifier = self._browser_verifier
+                self._stop_oauth_callback()
+                if not self._authorizing:
+                    return
+                if error:
+                    self._authorizing = False
+                    self.on_account(False, f"Discord login failed: {error}")
+                elif code:
+                    self._oauth_exchange_pending = True
+                    self._exchange_authorization_code(
+                        code,
+                        verifier,
+                        DESKTOP_REDIRECT_URI,
+                    )
+
+    def _stop_oauth_callback(self) -> None:
+        callback = self._oauth_callback
+        self._oauth_callback = None
+        self._browser_verifier = ""
+        if callback is not None:
+            callback.stop()
 
     def login(self) -> None:
+        self._stop_oauth_callback()
         self._authorizing = True
+        self._oauth_exchange_pending = False
         verifier = Opaque()
         challenge = Opaque()
         args = Opaque()
@@ -477,16 +629,37 @@ class DiscordSocialClient:
             self.lib.Discord_AuthorizationArgs_SetCodeChallenge(
                 ctypes.byref(args), ctypes.byref(challenge)
             )
+
+            callback = OAuthCallbackServer(DESKTOP_REDIRECT_URI, state_text)
+            try:
+                callback.start()
+            except OSError as exc:
+                self.on_account(
+                    False,
+                    "Discord browser login could not start its local callback "
+                    f"listener on {DESKTOP_REDIRECT_URI}: {exc}",
+                )
+            else:
+                self._oauth_callback = callback
+                self._browser_verifier = verifier_text
+
             @self._remember
             @self.AuthorizationCallback
             def authorized(result, code, redirect_uri, _user_data):
                 code_text = self._owned_string(code)
                 redirect_text = self._owned_string(redirect_uri)
                 successful, message = self._result(result)
-                if not successful:
-                    self._authorizing = False
-                    self.on_account(False, _friendly_login_error(message))
+                if self._oauth_exchange_pending:
                     return
+                if not successful:
+                    if self._oauth_callback is None:
+                        self._authorizing = False
+                        self.on_account(False, _friendly_login_error(message))
+                    return
+                if not self._authorizing:
+                    return
+                self._stop_oauth_callback()
+                self._oauth_exchange_pending = True
                 self._exchange_authorization_code(
                     code_text, verifier_text, redirect_text
                 )
@@ -498,9 +671,10 @@ class DiscordSocialClient:
                 None,
                 None,
             )
-            self.on_authorization_url(
-                authorization_url(scopes_text, challenge_text, state_text)
-            )
+            if self._oauth_callback is not None:
+                self.on_authorization_url(
+                    authorization_url(scopes_text, challenge_text, state_text)
+                )
             del scopes_buffer, state_buffer
         finally:
             self.lib.Discord_AuthorizationArgs_Drop(ctypes.byref(args))
@@ -529,6 +703,7 @@ class DiscordSocialClient:
             successful, message = self._result(result)
             if not successful:
                 self._authorizing = False
+                self._oauth_exchange_pending = False
                 if source == "login":
                     text = _friendly_login_error(message)
                 else:
@@ -536,6 +711,7 @@ class DiscordSocialClient:
                 self.on_account(False, text)
                 return
             self._authorizing = False
+            self._oauth_exchange_pending = False
             self._access_token = access
             self._refresh_token = refresh
             self.on_tokens(access, refresh, int(expires_in))
@@ -730,6 +906,9 @@ class DiscordSocialClient:
             self.lib.Discord_Client_ClearRichPresence(ctypes.byref(self.client))
 
     def logout(self) -> None:
+        self._authorizing = False
+        self._oauth_exchange_pending = False
+        self._stop_oauth_callback()
         self.clear_presence()
         if self._access_token:
             token, token_buffer = _input_string(self._access_token)
@@ -756,6 +935,9 @@ class DiscordSocialClient:
     def close(self) -> None:
         if self._closed:
             return
+        self._authorizing = False
+        self._oauth_exchange_pending = False
+        self._stop_oauth_callback()
         self.clear_presence()
         self.lib.Discord_Client_Disconnect(ctypes.byref(self.client))
         self.lib.Discord_Client_Drop(ctypes.byref(self.client))
