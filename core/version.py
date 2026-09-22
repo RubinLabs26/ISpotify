@@ -1,3 +1,3 @@
 """Version of the desktop application shipped in this source tree."""
 
-APP_VERSION = "19.2.0"
+APP_VERSION = "19.2.1"

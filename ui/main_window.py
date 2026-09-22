@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import sys
-
 from PySide6.QtCore import QEasingCurve, QProcess, QPropertyAnimation, QTimer, QSize, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtMultimedia import QMediaPlayer
@@ -18,7 +16,7 @@ from core.library import Library
 from core.playback_queue import PlaybackQueue
 from core.update_install import (
     install_linux_portable, install_mode, install_windows,
-    install_windows_portable,
+    install_windows_portable, restart_application,
 )
 from core.updater import RELEASE_PAGE, UpdateManager
 from core.version import APP_VERSION
@@ -344,7 +342,7 @@ class MainWindow(QMainWindow):
             QMessageBox.Yes,
         )
         if answer == QMessageBox.Yes:
-            QProcess.startDetached(sys.executable, [])
+            restart_application()
             QApplication.quit()
 
     def _on_settings_status(self, message: str):

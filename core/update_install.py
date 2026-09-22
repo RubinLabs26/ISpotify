@@ -38,6 +38,14 @@ def install_mode() -> str:
     return "manual"
 
 
+def restart_application() -> None:
+    """Start an independent PyInstaller instance before the current one exits."""
+    environment = os.environ.copy()
+    if getattr(sys, "frozen", False):
+        environment["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    subprocess.Popen([sys.executable], env=environment, close_fds=True)
+
+
 def install_windows(installer: Path) -> None:
     """Let a detached helper finish installation after this app exits.
 
@@ -66,6 +74,7 @@ if ($process.ExitCode -eq 0) {
     if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) {
         $app = Join-Path $env:LOCALAPPDATA 'Programs\ISpotify\ISpotify.exe'
         if (Test-Path -LiteralPath $app) {
+            $env:PYINSTALLER_RESET_ENVIRONMENT = '1'
             Start-Process -FilePath $app -WindowStyle Hidden
         }
     }
@@ -112,6 +121,7 @@ try {
         [System.Windows.Forms.MessageBoxIcon]::Information
     )
     if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) {
+        $env:PYINSTALLER_RESET_ENVIRONMENT = '1'
         Start-Process -FilePath $Target -WindowStyle Hidden
     }
 } catch {
