@@ -11,8 +11,8 @@ from core.version import APP_VERSION
 class UpdaterTests(unittest.TestCase):
     def test_only_newer_stable_versions_are_offered(self):
         self.assertEqual(version_tuple("v19.1.2"), (19, 1, 2))
-        self.assertTrue(is_newer("v19.1.4", APP_VERSION))
-        self.assertFalse(is_newer("v19.1.3", APP_VERSION))
+        self.assertTrue(is_newer("v19.2.1", APP_VERSION))
+        self.assertFalse(is_newer("v19.2.0", APP_VERSION))
         self.assertFalse(is_newer("v19.1.1", APP_VERSION))
         self.assertFalse(is_newer("v19.2.0-rc1", APP_VERSION))
 
@@ -22,7 +22,7 @@ class UpdaterTests(unittest.TestCase):
             "digest": "sha256:" + "a" * 64,
             "browser_download_url": (
                 "https://github.com/RubinLabs26/ISpotify/releases/download/"
-                "v19.1.3/ISpotify-Setup-x86_64.exe"
+                "v19.2.0/ISpotify-Setup-x86_64.exe"
             ),
         }
         self.assertEqual(

@@ -97,6 +97,27 @@ class LibraryPlaylistTests(unittest.TestCase):
             "https://i.ytimg.com/vi/abcdefghijk/mqdefault.jpg",
         )
 
+    def test_favorites_and_listening_history_survive_restart(self):
+        library = self.make_library()
+        self.assertTrue(library.toggle_favorite("one"))
+        library.mark_played("one")
+        library.mark_played("two")
+        library.mark_played("one")
+
+        restored = Library()
+        self.assertEqual([song["video_id"] for song in restored.favorites()], ["one"])
+        self.assertEqual(restored.find("one")["play_count"], 2)
+        self.assertEqual(
+            [entry["song"]["video_id"] for entry in restored.listening_history()],
+            ["one", "two", "one"],
+        )
+        self.assertEqual(
+            [song["video_id"] for song in restored.recently_played()],
+            ["one", "two"],
+        )
+        restored.remove_song("one")
+        self.assertEqual(len(Library().listening_history()), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

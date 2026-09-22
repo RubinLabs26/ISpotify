@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 
 PackageIdentifier: ISpotify.ISpotify
-PackageVersion: 19.1.3
+PackageVersion: 19.2.0
 PackageLocale: en-US
 Publisher: ISpotify
 PublisherUrl: https://github.com/RubinLabs26
@@ -19,10 +19,10 @@ Tags:
   - music
   - player
 ReleaseNotes: |-
-  Saves queued and paused downloads across app restarts.
-  Automatically resumes interrupted downloads when the app reopens.
-  Adds Pause, Resume, Cancel, and Retry controls for each download.
-  Keeps failed downloads visible and preserves playlist association after restart.
-ReleaseNotesUrl: https://github.com/RubinLabs26/ISpotify/releases/tag/v19.1.3
+  Adds Up Next with drag ordering, Play Next, shuffle, and repeat controls.
+  Adds Favorites and Recently played to Home and the library.
+  Adds library search, filters, and sorting.
+  Displays download speed, ETA, and clearer retry guidance.
+ReleaseNotesUrl: https://github.com/RubinLabs26/ISpotify/releases/tag/v19.2.0
 ManifestType: defaultLocale
 ManifestVersion: 1.12.0

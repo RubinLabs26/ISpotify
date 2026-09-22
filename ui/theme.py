@@ -520,6 +520,26 @@ def install_theme(app) -> None:
             border-color: {COLORS["border_bright"]};
             background: {COLORS["surface_raised"]};
         }}
+        QComboBox, QListWidget#upNextList {{
+            background: {COLORS["surface"]};
+            border: 1px solid {COLORS["border"]};
+            border-radius: 10px;
+            padding: 8px;
+            color: {COLORS["text"]};
+        }}
+        QComboBox QAbstractItemView {{
+            background: {COLORS["surface_raised"]};
+            color: {COLORS["text"]};
+            selection-background-color: {COLORS["surface_active"]};
+        }}
+        QListWidget#upNextList::item {{
+            border-bottom: 1px solid {COLORS["border"]};
+            padding: 12px 8px;
+        }}
+        QListWidget#upNextList::item:selected {{
+            background: {COLORS["surface_active"]};
+            color: {COLORS["text"]};
+        }}
         QTextEdit#cookieBox {{
             background: {COLORS["surface"]};
             border: 1px solid {COLORS["border"]};

@@ -5,24 +5,34 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
 
-from ui.widgets import ArtworkLabel, EmptyState, MotionButton, icon_button, standard_icon
+from ui.widgets import ArtworkLabel, MotionButton, icon_button
 
 
 class HomeTab(QWidget):
     searchRequested = Signal()
     libraryRequested = Signal()
+    favoritesRequested = Signal()
+    historyRequested = Signal()
     playRequested = Signal(object)
 
     def __init__(self, library):
         super().__init__()
         self.library = library
-        self._song_widgets = []
-        self.root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        host = QWidget()
+        self.root = QVBoxLayout(host)
         self.root.setContentsMargins(0, 0, 0, 24)
         self.root.setSpacing(22)
+        scroll.setWidget(host)
+        outer.addWidget(scroll)
         self._build()
 
     def _build(self):
@@ -36,6 +46,7 @@ class HomeTab(QWidget):
         title = QLabel("Music, without the noise.")
         title.setObjectName("pageTitle")
         title.setStyleSheet("font-size: 22pt; letter-spacing: -0.3px; margin-top: 2px;")
+        title.setWordWrap(True)
         detail = QLabel("Search, save, and listen — kept local.")
         detail.setObjectName("pageSubtitle")
         detail.setWordWrap(True)
@@ -66,42 +77,65 @@ class HomeTab(QWidget):
         hero_layout.addWidget(hero_art, 0, Qt.AlignVCenter)
         self.root.addWidget(hero)
 
-        heading = QHBoxLayout()
-        label = QLabel("Recently added")
-        label.setObjectName("sectionTitle")
-        label.setStyleSheet("font-size: 11.5pt;")
-        heading.addWidget(label)
-        heading.addStretch()
-        view_all = MotionButton("View library")
-        view_all.setObjectName("ghostButton")
-        view_all.clicked.connect(self.libraryRequested.emit)
-        heading.addWidget(view_all)
-        self.root.addLayout(heading)
-
-        self.song_row = QHBoxLayout()
-        self.song_row.setSpacing(14)
-        self.root.addLayout(self.song_row)
+        self.rows = {}
+        for section in ("Recently added", "Recently played", "Favorites"):
+            heading = QHBoxLayout()
+            label = QLabel(section)
+            label.setObjectName("sectionTitle")
+            label.setStyleSheet("font-size: 11.5pt;")
+            heading.addWidget(label)
+            heading.addStretch()
+            action = {
+                "Recently added": ("View library", self.libraryRequested.emit),
+                "Recently played": ("View history", self.historyRequested.emit),
+                "Favorites": ("View favorites", self.favoritesRequested.emit),
+            }[section]
+            view_all = MotionButton(action[0])
+            view_all.setObjectName("ghostButton")
+            view_all.clicked.connect(action[1])
+            heading.addWidget(view_all)
+            self.root.addLayout(heading)
+            row = QHBoxLayout()
+            row.setSpacing(14)
+            self.root.addLayout(row)
+            self.rows[section] = row
         self.root.addStretch()
         self.refresh()
 
     def refresh(self):
-        while self.song_row.count():
-            item = self.song_row.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.setParent(None)
-                widget.deleteLater()
-        songs = self.library.all_songs()[-4:][::-1]
-        if not songs:
-            self.song_row.addWidget(EmptyState(
-                "Your library is quiet",
-                "Download your first song from search and it will appear here.",
-            ))
-            return
-        for song in songs:
-            card = self._make_card(song)
-            self.song_row.addWidget(card)
-        self.song_row.addStretch()
+        limit = max(1, min(4, (self.width() - 20) // 194))
+        self._last_limit = limit
+        sections = {
+            "Recently added": self.library.all_songs()[-limit:][::-1],
+            "Recently played": self.library.recently_played(limit),
+            "Favorites": self.library.favorites()[-limit:][::-1],
+        }
+        for name, row in self.rows.items():
+            while row.count():
+                item = row.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.setParent(None)
+                    widget.deleteLater()
+            songs = sections[name]
+            if songs:
+                for song in songs:
+                    row.addWidget(self._make_card(song))
+            else:
+                hint = QLabel({
+                    "Recently added": "Download a song from Search to start your library.",
+                    "Recently played": "Play a saved song to start your listening history.",
+                    "Favorites": "Use the heart on a saved song to keep it here.",
+                }[name])
+                hint.setObjectName("muted")
+                row.addWidget(hint)
+            row.addStretch()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        limit = max(1, min(4, (self.width() - 20) // 194))
+        if hasattr(self, "rows") and limit != getattr(self, "_last_limit", None):
+            self.refresh()
 
     def _make_card(self, song):
         card = QFrame()

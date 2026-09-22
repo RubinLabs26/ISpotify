@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libpulse0 libxkbcommon0
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"

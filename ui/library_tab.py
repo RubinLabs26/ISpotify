@@ -4,7 +4,7 @@ import os
 
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QInputDialog, QLabel, QScrollArea, QSizePolicy,
+    QComboBox, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QScrollArea, QSizePolicy,
     QVBoxLayout, QWidget,
 )
 
@@ -17,6 +17,8 @@ from ui.widgets import (
 
 class LibrarySongCard(QFrame):
     playRequested = Signal(object)
+    playNextRequested = Signal(str)
+    favoriteRequested = Signal(str)
     renameRequested = Signal(str)
     playlistRequested = Signal(str)
     removeRequested = Signal(str)
@@ -65,6 +67,13 @@ class LibrarySongCard(QFrame):
         play = icon_button("SP_MediaPlay", "Play", "playButton", size=15)
         play.setEnabled(available)
         play.clicked.connect(lambda: self.playRequested.emit(self.song))
+        play_next = icon_button("SP_MediaSeekForward", "Play next", size=15)
+        play_next.setEnabled(available)
+        play_next.clicked.connect(lambda: self.playNextRequested.emit(video_id))
+        favorite = MotionButton("♥" if song.get("favorite") else "♡")
+        favorite.setObjectName("ghostButton")
+        favorite.setToolTip("Remove from favorites" if song.get("favorite") else "Add to favorites")
+        favorite.clicked.connect(lambda: self.favoriteRequested.emit(video_id))
         remove = icon_button(
             "SP_TrashIcon", "Remove from library", "destructiveButton"
         )
@@ -72,6 +81,8 @@ class LibrarySongCard(QFrame):
         layout.addWidget(organize)
         layout.addWidget(rename)
         layout.addWidget(play)
+        layout.addWidget(play_next)
+        layout.addWidget(favorite)
         layout.addWidget(remove)
 
     def set_playing(self, playing: bool):
@@ -83,6 +94,7 @@ class LibrarySongCard(QFrame):
 
 class PlaylistTrackRow(QFrame):
     playRequested = Signal(object)
+    playNextRequested = Signal(str)
     renameRequested = Signal(str)
     moveRequested = Signal(str)
     removeRequested = Signal(str)
@@ -136,17 +148,21 @@ class PlaylistTrackRow(QFrame):
         play.setEnabled(available)
         if available:
             play.clicked.connect(lambda: self.playRequested.emit(song))
+        play_next = icon_button("SP_MediaSeekForward", "Play next", size=15)
+        play_next.setEnabled(available)
+        play_next.clicked.connect(lambda: self.playNextRequested.emit(video_id))
         remove = icon_button(
             "SP_TrashIcon", "Remove from this playlist", "destructiveButton",
             size=15,
         )
         remove.clicked.connect(lambda: self.removeRequested.emit(video_id))
-        for button in (up, down, move, rename, play, remove):
+        for button in (up, down, move, rename, play, play_next, remove):
             layout.addWidget(button)
 
 
 class PlaylistLibraryCard(QFrame):
     playRequested = Signal(object)
+    playNextRequested = Signal(str)
     renameRequested = Signal(str)
     removeRequested = Signal(str)
     songRenameRequested = Signal(str)
@@ -230,6 +246,7 @@ class PlaylistLibraryCard(QFrame):
                     can_down=index < len(tracks) - 1,
                 )
                 row.playRequested.connect(self.playRequested.emit)
+                row.playNextRequested.connect(self.playNextRequested.emit)
                 row.renameRequested.connect(self.songRenameRequested.emit)
                 row.moveRequested.connect(
                     lambda video_id, source=playlist_id:
@@ -273,6 +290,7 @@ class PlaylistLibraryCard(QFrame):
 
 class LibraryTab(QWidget):
     playRequested = Signal(object)
+    playNextRequested = Signal(str)
     libraryChanged = Signal()
     songRenamed = Signal(str, str)
     statusChanged = Signal(str)
@@ -283,6 +301,20 @@ class LibraryTab(QWidget):
         self.cards = {}
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 16)
+        controls = QHBoxLayout()
+        self.query = QLineEdit()
+        self.query.setPlaceholderText("Search your library")
+        self.query.textChanged.connect(self.refresh)
+        controls.addWidget(self.query, 1)
+        self.filter = QComboBox()
+        self.filter.addItems(["All songs", "Favorites", "Recently played"])
+        self.filter.currentIndexChanged.connect(self.refresh)
+        controls.addWidget(self.filter)
+        self.sort = QComboBox()
+        self.sort.addItems(["Recently added", "Title", "Artist", "Last played", "Most played"])
+        self.sort.currentIndexChanged.connect(self.refresh)
+        controls.addWidget(self.sort)
+        root.addLayout(controls)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.NoFrame)
@@ -295,12 +327,7 @@ class LibraryTab(QWidget):
         self.refresh()
 
     def refresh(self):
-        while self.list_layout.count():
-            item = self.list_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.setParent(None)
-                widget.deleteLater()
+        self._clear_layout(self.list_layout)
         self.cards = {}
 
         playlist_heading = QHBoxLayout()
@@ -314,11 +341,18 @@ class LibraryTab(QWidget):
         playlist_heading.addWidget(create)
         self.list_layout.addLayout(playlist_heading)
 
-        playlists = self.library.all_playlists()
+        query = self.query.text().strip().casefold()
+        playlists = (
+            [playlist for playlist in self.library.all_playlists()
+             if query in playlist.get("title", "").casefold()
+             or query in playlist.get("channel", "").casefold()]
+            if self.filter.currentIndex() == 0 else []
+        )
         if playlists:
             for playlist in reversed(playlists):
                 card = PlaylistLibraryCard(playlist, self.library)
                 card.playRequested.connect(self.playRequested.emit)
+                card.playNextRequested.connect(self.playNextRequested.emit)
                 card.renameRequested.connect(self._rename_playlist)
                 card.removeRequested.connect(self._remove_playlist)
                 card.songRenameRequested.connect(self._rename_song)
@@ -326,7 +360,7 @@ class LibraryTab(QWidget):
                 card.songRemoveRequested.connect(self._remove_playlist_song)
                 card.songOrderRequested.connect(self._order_playlist_song)
                 self.list_layout.addWidget(card)
-        else:
+        elif not query and self.filter.currentIndex() == 0:
             hint = QLabel(
                 "Create a playlist, then add downloaded songs with the folder "
                 "button."
@@ -339,23 +373,71 @@ class LibraryTab(QWidget):
         heading = QLabel("Songs")
         heading.setObjectName("sectionTitle")
         self.list_layout.addWidget(heading)
-        songs = self.library.all_songs()
+        songs = self._visible_songs(query)
         if not songs:
             self.list_layout.addWidget(EmptyState(
-                "Your library is quiet",
-                "Download a song or playlist from search and your collection "
-                "will live here.",
+                "No matching songs" if query or self.filter.currentIndex() else "Your library is quiet",
+                "Try another search or filter." if query or self.filter.currentIndex()
+                else "Download a song or playlist from search and your collection will live here.",
             ))
         else:
-            for song in reversed(songs):
+            for song in songs:
                 card = LibrarySongCard(song)
                 card.playRequested.connect(self.playRequested.emit)
+                card.playNextRequested.connect(self.playNextRequested.emit)
+                card.favoriteRequested.connect(self._toggle_favorite)
                 card.renameRequested.connect(self._rename_song)
                 card.playlistRequested.connect(self._add_song_to_playlist)
                 card.removeRequested.connect(self._remove_song)
                 self.cards[song.get("video_id", "")] = card
                 self.list_layout.addWidget(card)
         self.list_layout.addStretch()
+
+    @staticmethod
+    def _clear_layout(layout) -> None:
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.hide()
+                widget.setParent(None)
+                widget.deleteLater()
+            nested = item.layout()
+            if nested:
+                LibraryTab._clear_layout(nested)
+                nested.deleteLater()
+
+    def _visible_songs(self, query: str) -> list[dict]:
+        songs = self.library.all_songs()
+        if self.filter.currentIndex() == 1:
+            songs = [song for song in songs if song.get("favorite")]
+        elif self.filter.currentIndex() == 2:
+            played = {song["video_id"] for song in self.library.recently_played(200)}
+            songs = [song for song in songs if song.get("video_id") in played]
+        songs = [
+            song for song in songs
+            if query in song.get("title", "").casefold()
+            or query in song.get("channel", "").casefold()
+        ]
+        sort = self.sort.currentText()
+        if sort == "Title":
+            songs.sort(key=lambda song: song.get("title", "").casefold())
+        elif sort == "Artist":
+            songs.sort(key=lambda song: song.get("channel", "").casefold())
+        elif sort == "Last played":
+            songs.sort(key=lambda song: song.get("last_played") or "", reverse=True)
+        elif sort == "Most played":
+            songs.sort(key=lambda song: int(song.get("play_count") or 0), reverse=True)
+        elif self.filter.currentIndex() == 2:
+            songs.sort(key=lambda song: song.get("last_played") or "", reverse=True)
+        else:
+            songs.reverse()
+        return songs
+
+    def _toggle_favorite(self, video_id: str) -> None:
+        self.library.toggle_favorite(video_id)
+        self.refresh()
+        self.libraryChanged.emit()
 
     def mark_playing(self, video_id: str):
         for key, card in self.cards.items():

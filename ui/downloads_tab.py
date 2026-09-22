@@ -77,6 +77,22 @@ class DownloadRow(QFrame):
         self.status.setText(
             f"{description} · {value}%" if value and state != "failed" else description
         )
+        if state == "failed":
+            self.status.setToolTip(job.get("error") or "Download failed")
+
+    def update_transfer(self, percent: int, speed: int, eta: int) -> None:
+        self.progress.setValue(percent)
+        if percent >= 100:
+            self.status.setText("Converting to MP3")
+            return
+        detail = [f"{percent}%"]
+        if speed:
+            rate = f"{speed / 1024 / 1024:.1f} MB/s" if speed >= 1024 * 1024 else f"{speed / 1024:.0f} KB/s"
+            detail.append(rate)
+        if eta:
+            minutes, seconds = divmod(eta, 60)
+            detail.append(f"{minutes}:{seconds:02d} remaining" if minutes else f"{seconds}s remaining")
+        self.status.setText("Downloading audio · " + " · ".join(detail))
 
 
 class DownloadsTab(QWidget):
@@ -151,3 +167,8 @@ class DownloadsTab(QWidget):
                 f"Downloading audio · {value}%" if value < 100
                 else "Converting to MP3"
             )
+
+    def update_transfer(self, video_id: str, percent: int, speed: int, eta: int) -> None:
+        row = self.rows.get(video_id)
+        if row:
+            row.update_transfer(percent, speed, eta)
