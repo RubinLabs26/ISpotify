@@ -1,6 +1,6 @@
 #define AppName "iSpotify"
 #define AppVersion "19.1.3"
-#define AppPublisher "ISpotify"
+#define AppPublisher "Rubin Labs"
 #define AppExeName "ISpotify.exe"
 
 [Setup]
@@ -27,6 +27,10 @@ SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
+#ifdef SIGN_WINDOWS
+SignTool=RubinSign
+SignedUninstaller=yes
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

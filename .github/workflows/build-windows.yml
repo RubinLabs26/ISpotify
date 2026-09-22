@@ -14,6 +14,7 @@ on:
       - "requirements.txt"
       - "packaging/ISpotify-windows-x86_64.spec"
       - "packaging/windows-installer.iss"
+      - "packaging/sign-windows.ps1"
       - "packaging/windows-version.txt"
       - "packaging/publish-github-release.sh"
       - ".github/workflows/build-windows.yml"
@@ -28,6 +29,7 @@ on:
       - "requirements.txt"
       - "packaging/ISpotify-windows-x86_64.spec"
       - "packaging/windows-installer.iss"
+      - "packaging/sign-windows.ps1"
       - "packaging/windows-version.txt"
       - "packaging/publish-github-release.sh"
       - ".github/workflows/build-windows.yml"
@@ -53,6 +55,15 @@ jobs:
           repository: RubinLabs26/ISpotify-sdk
           token: ${{ secrets.DISCORD_SDK_REPO_TOKEN }}
           path: vendor/discord_social_sdk
+      - name: Require Rubin Labs signing credentials
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          WINDOWS_SIGNING_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_SIGNING_PFX_BASE64 -or -not $env:WINDOWS_SIGNING_PFX_PASSWORD) {
+            throw 'Rubin Labs Windows signing secrets are not configured.'
+          }
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
@@ -66,8 +77,12 @@ jobs:
           python -c "from core.discord_social_sdk import DiscordSocialClient; c=DiscordSocialClient(lambda *a: None, lambda *a: None, lambda *a: None); c.close(); print('Discord Social SDK loaded')"
       - name: Build portable executable
         run: pyinstaller --noconfirm --clean --distpath dist/windows packaging/ISpotify-windows-x86_64.spec
-      - name: Build installer
-        run: iscc packaging/windows-installer.iss
+      - name: Sign portable executable and build signed installer
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          WINDOWS_SIGNING_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+        run: ./packaging/sign-windows.ps1
       - name: Verify tagged version
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
