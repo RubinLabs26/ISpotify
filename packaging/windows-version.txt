@@ -12,7 +12,7 @@ VSVersionInfo(
   kids=[
     StringFileInfo([
       StringTable('040904B0', [
-        StringStruct('CompanyName', 'iSpotify'),
+        StringStruct('CompanyName', 'Rubin Labs'),
         StringStruct('FileDescription', 'iSpotify desktop music player'),
         StringStruct('FileVersion', '19.1.3'),
         StringStruct('InternalName', 'ISpotify'),
