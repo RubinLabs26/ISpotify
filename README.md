@@ -33,19 +33,19 @@
 
 | | |
 |---|---|
-| **Search and discovery**<br>Search for songs and playlists, explore playlist tracks, and select multiple items for download. | **Playback**<br>Play local MP3 files with queue, previous/next, seek, volume, and automatic pause when headphones disconnect. |
+| **Search and discovery**<br>Search for songs and playlists, explore playlist tracks, and select multiple items for download. | **Playback**<br>Play local MP3 files sequentially from your library with previous/next, seek, volume, and automatic pause when headphones disconnect. |
 | **Downloads and library**<br>Queue MP3 downloads across restarts with speed, ETA, and retry guidance; search and sort your library, favorite songs, and organize playlists for offline listening. | **Privacy and integrations**<br>Use optional local YouTube cookies and Discord listening activity with cover art, playback time, and listening/download links. Credentials stay in the operating system vault. |
-| **Desktop experience**<br>Use Up Next with drag ordering, Play Next, shuffle, repeat, favorites, and recently played, plus quiet background update checks. | **Flexible installation**<br>Choose a Windows installer, portable executable, Debian package, Linux repository, or universal installer. Supported builds can install updates in-app and prompt for restart. |
+| **Desktop experience**<br>Keep favorites and recently played at hand, with quiet background update checks. | **Flexible installation**<br>Choose a Windows installer, portable executable, Debian package, Linux repository, or universal installer. Supported builds can install updates in-app and prompt for restart. |
 
 ## Download
 
-The current stable release is **v19.2.0**. Checksums are published beside the standalone executables.
+The current stable release is **v19.2.2**. Checksums are published beside the standalone executables.
 
 | Platform | Package | Download |
 |---|---|---|
 | Windows 10/11 | Installer | [ISpotify-Setup-x86_64.exe](https://github.com/RubinLabs26/ISpotify/releases/latest/download/ISpotify-Setup-x86_64.exe) |
 | Windows 10/11 | Portable | [ISpotify-windows-x86_64.exe](https://github.com/RubinLabs26/ISpotify/releases/latest/download/ISpotify-windows-x86_64.exe) |
-| Debian / Ubuntu | DEB package | [ispotify_19.2.0_amd64.deb](https://github.com/RubinLabs26/ISpotify/releases/download/v19.2.0/ispotify_19.2.0_amd64.deb) |
+| Debian / Ubuntu | DEB package | [ispotify_19.2.2_amd64.deb](https://github.com/RubinLabs26/ISpotify/releases/download/v19.2.2/ispotify_19.2.2_amd64.deb) |
 | Linux x86-64 | Portable | [ISpotify-linux-x86_64](https://github.com/RubinLabs26/ISpotify/releases/latest/download/ISpotify-linux-x86_64) |
 | All packages | Release page | [Latest release](https://github.com/RubinLabs26/ISpotify/releases/latest) |
 

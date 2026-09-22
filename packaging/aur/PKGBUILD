@@ -1,7 +1,7 @@
 # Maintainer: ISpotify contributors <releases at ispotify dot invalid>
 
 pkgname=ispotify
-pkgver=19.2.1
+pkgver=19.2.2
 pkgrel=1
 pkgdesc='Desktop music search, playlist, download, and playback application'
 arch=('any')

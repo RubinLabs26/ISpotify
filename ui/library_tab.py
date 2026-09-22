@@ -17,7 +17,6 @@ from ui.widgets import (
 
 class LibrarySongCard(QFrame):
     playRequested = Signal(object)
-    playNextRequested = Signal(str)
     favoriteRequested = Signal(str)
     renameRequested = Signal(str)
     playlistRequested = Signal(str)
@@ -67,9 +66,6 @@ class LibrarySongCard(QFrame):
         play = icon_button("SP_MediaPlay", "Play", "playButton", size=15)
         play.setEnabled(available)
         play.clicked.connect(lambda: self.playRequested.emit(self.song))
-        play_next = icon_button("SP_MediaSeekForward", "Play next", size=15)
-        play_next.setEnabled(available)
-        play_next.clicked.connect(lambda: self.playNextRequested.emit(video_id))
         favorite = MotionButton("♥" if song.get("favorite") else "♡")
         favorite.setObjectName("ghostButton")
         favorite.setToolTip("Remove from favorites" if song.get("favorite") else "Add to favorites")
@@ -81,7 +77,6 @@ class LibrarySongCard(QFrame):
         layout.addWidget(organize)
         layout.addWidget(rename)
         layout.addWidget(play)
-        layout.addWidget(play_next)
         layout.addWidget(favorite)
         layout.addWidget(remove)
 
@@ -94,7 +89,6 @@ class LibrarySongCard(QFrame):
 
 class PlaylistTrackRow(QFrame):
     playRequested = Signal(object)
-    playNextRequested = Signal(str)
     renameRequested = Signal(str)
     moveRequested = Signal(str)
     removeRequested = Signal(str)
@@ -148,21 +142,17 @@ class PlaylistTrackRow(QFrame):
         play.setEnabled(available)
         if available:
             play.clicked.connect(lambda: self.playRequested.emit(song))
-        play_next = icon_button("SP_MediaSeekForward", "Play next", size=15)
-        play_next.setEnabled(available)
-        play_next.clicked.connect(lambda: self.playNextRequested.emit(video_id))
         remove = icon_button(
             "SP_TrashIcon", "Remove from this playlist", "destructiveButton",
             size=15,
         )
         remove.clicked.connect(lambda: self.removeRequested.emit(video_id))
-        for button in (up, down, move, rename, play, play_next, remove):
+        for button in (up, down, move, rename, play, remove):
             layout.addWidget(button)
 
 
 class PlaylistLibraryCard(QFrame):
     playRequested = Signal(object)
-    playNextRequested = Signal(str)
     renameRequested = Signal(str)
     removeRequested = Signal(str)
     songRenameRequested = Signal(str)
@@ -246,7 +236,6 @@ class PlaylistLibraryCard(QFrame):
                     can_down=index < len(tracks) - 1,
                 )
                 row.playRequested.connect(self.playRequested.emit)
-                row.playNextRequested.connect(self.playNextRequested.emit)
                 row.renameRequested.connect(self.songRenameRequested.emit)
                 row.moveRequested.connect(
                     lambda video_id, source=playlist_id:
@@ -290,7 +279,6 @@ class PlaylistLibraryCard(QFrame):
 
 class LibraryTab(QWidget):
     playRequested = Signal(object)
-    playNextRequested = Signal(str)
     libraryChanged = Signal()
     songRenamed = Signal(str, str)
     statusChanged = Signal(str)
@@ -352,7 +340,6 @@ class LibraryTab(QWidget):
             for playlist in reversed(playlists):
                 card = PlaylistLibraryCard(playlist, self.library)
                 card.playRequested.connect(self.playRequested.emit)
-                card.playNextRequested.connect(self.playNextRequested.emit)
                 card.renameRequested.connect(self._rename_playlist)
                 card.removeRequested.connect(self._remove_playlist)
                 card.songRenameRequested.connect(self._rename_song)
@@ -384,7 +371,6 @@ class LibraryTab(QWidget):
             for song in songs:
                 card = LibrarySongCard(song)
                 card.playRequested.connect(self.playRequested.emit)
-                card.playNextRequested.connect(self.playNextRequested.emit)
                 card.favoriteRequested.connect(self._toggle_favorite)
                 card.renameRequested.connect(self._rename_song)
                 card.playlistRequested.connect(self._add_song_to_playlist)
