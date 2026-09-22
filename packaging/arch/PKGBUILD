@@ -1,5 +1,5 @@
 pkgname=ispotify
-pkgver=19.3.0
+pkgver=19.3.1
 pkgrel=1
 pkgdesc='Desktop music search, playback, and download application'
 arch=('x86_64')
@@ -14,7 +14,7 @@ source=(
   'LICENSE'
 )
 sha256sums=(
-  'febb7112892de92a4599aa0b2dd375f1f05bcd32c0191e2eae51f52c70570560'
+  'SKIP'
   'ba54d40452a6eedc7f8d4491caffe495620712532998028b80e97f9f410e3745'
   'SKIP'
   'afaf18171411ff094071be639aaa9c471c3242e76a11e77b56f1748eeedf1a01'
