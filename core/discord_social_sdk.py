@@ -48,7 +48,7 @@ class OAuthCallbackServer:
         }:
             raise ValueError("Discord OAuth requires an HTTP loopback redirect")
         self.host = parsed.hostname
-        self.port = parsed.port or 80
+        self.port = parsed.port if parsed.port is not None else 80
         self.path = parsed.path or "/"
         self.expected_state = expected_state
         self._results: queue.Queue[tuple[str, str]] = queue.Queue(maxsize=1)
