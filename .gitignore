@@ -8,6 +8,9 @@ downloads/*
 .env
 dist/
 build/
+android/.gradle/
+android/local.properties
+android/app/build/
 vendor/discord_social_sdk/
 library.json
 cookies.txt

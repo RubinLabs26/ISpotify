@@ -1,0 +1,79 @@
+name: Build Android client
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [android]
+    paths:
+      - "android/**"
+      - ".github/workflows/build-android.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/build-android.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android 16 SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:assembleDebug
+      - name: Stage APK
+        run: |
+          mkdir -p release
+          cp android/app/build/outputs/apk/debug/app-debug.apk release/ISpotify-Android-preview.apk
+          sha256sum release/ISpotify-Android-preview.apk > release/ISpotify-Android-preview.apk.sha256
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: ISpotify-Android-${{ github.sha }}
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/android'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ISpotify-Android-${{ github.sha }}
+          path: release
+      - name: Publish Android preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view android-continuous --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create android-continuous \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "iSpotify Android Preview" \
+              --prerelease --latest=false \
+              --notes "Automatically built from the dedicated Android branch."
+          fi
+          gh release upload android-continuous release/* \
+            --repo "$GITHUB_REPOSITORY" --clobber
