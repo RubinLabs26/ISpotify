@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 
 PackageIdentifier: ISpotify.ISpotify
-PackageVersion: 19.2.0
+PackageVersion: 19.2.2
 Platform:
   - Windows.Desktop
 MinimumOSVersion: 10.0.17763.0
@@ -15,12 +15,12 @@ UpgradeBehavior: install
 ReleaseDate: 2026-09-22
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/RubinLabs26/ISpotify/releases/download/v19.2.0/ISpotify-Setup-x86_64.exe
-    InstallerSha256: D4F827554C4818BDF82B5D7476F8876B0AC98EE3F5088A7A31AD5F2AA76F7129
+    InstallerUrl: https://github.com/RubinLabs26/ISpotify/releases/download/v19.2.2/ISpotify-Setup-x86_64.exe
+    InstallerSha256: CF83AB14084211316E5052C675C5E15D06877ABCC2DA6D25E59B32C93AE87B60
     AppsAndFeaturesEntries:
-      - DisplayName: iSpotify version 19.2.0
+      - DisplayName: iSpotify version 19.2.2
         Publisher: ISpotify
-        DisplayVersion: 19.2.0
+        DisplayVersion: 19.2.2
         ProductCode: '{5C75B2C8-5E96-49A1-BD27-554098E48075}_is1'
 ManifestType: installer
 ManifestVersion: 1.12.0
