@@ -1,5 +1,6 @@
 import unittest
 import tempfile
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,10 +12,10 @@ from core.version import APP_VERSION
 class UpdaterTests(unittest.TestCase):
     def test_only_newer_stable_versions_are_offered(self):
         self.assertEqual(version_tuple("v19.1.2"), (19, 1, 2))
-        self.assertTrue(is_newer("v19.2.1", APP_VERSION))
-        self.assertFalse(is_newer("v19.2.0", APP_VERSION))
+        self.assertTrue(is_newer("v19.2.2", APP_VERSION))
+        self.assertFalse(is_newer("v19.2.1", APP_VERSION))
         self.assertFalse(is_newer("v19.1.1", APP_VERSION))
-        self.assertFalse(is_newer("v19.2.0-rc1", APP_VERSION))
+        self.assertFalse(is_newer("v19.2.1-rc1", APP_VERSION))
 
     def test_download_requires_trusted_release_url_and_digest(self):
         trusted = {
@@ -55,7 +56,30 @@ class UpdaterTests(unittest.TestCase):
                 self.assertIn("while (Get-Process -Id $AppPid", script)
                 self.assertIn("if ($process.ExitCode -eq 0)", script)
                 self.assertIn("Restart now", script)
+                self.assertIn("$env:PYINSTALLER_RESET_ENVIRONMENT = '1'", script)
                 launch.assert_called_once()
+
+    def test_portable_windows_helper_resets_pyinstaller_environment(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(update_install, "CACHE_DIR", Path(folder)), patch.object(
+                update_install.subprocess, "Popen"
+            ) as launch:
+                update_install.install_windows_portable(Path(folder) / "download.exe")
+                script = (Path(folder) / "updates" / "install-portable.ps1").read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn("$env:PYINSTALLER_RESET_ENVIRONMENT = '1'", script)
+                launch.assert_called_once()
+
+    def test_restart_starts_fresh_frozen_instance(self):
+        with patch.object(update_install.sys, "frozen", True, create=True), patch.object(
+            update_install.subprocess, "Popen"
+        ) as launch, patch.dict(os.environ, {"_PYI_APPLICATION_HOME_DIR": "old"}):
+            update_install.restart_application()
+        self.assertEqual(launch.call_args.args[0], [update_install.sys.executable])
+        self.assertEqual(
+            launch.call_args.kwargs["env"]["PYINSTALLER_RESET_ENVIRONMENT"], "1"
+        )
 
 
 if __name__ == "__main__":
