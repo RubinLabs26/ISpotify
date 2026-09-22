@@ -54,6 +54,7 @@ class LibrarySongCard(QFrame):
         available = bool(file_path and os.path.exists(file_path))
         self.status_dot = StatusDot(available, "Available offline", "File missing")
         layout.addWidget(self.status_dot)
+        layout.addSpacing(6)
         video_id = self.song.get("video_id", "")
         organize = icon_button(
             "SP_DirIcon", "Add to playlist", size=16
@@ -289,6 +290,7 @@ class LibraryTab(QWidget):
         self.cards = {}
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 16)
+        root.setSpacing(12)
         controls = QHBoxLayout()
         self.query = QLineEdit()
         self.query.setPlaceholderText("Search your library")
@@ -308,8 +310,8 @@ class LibraryTab(QWidget):
         self.scroll.setFrameShape(QFrame.NoFrame)
         self.host = QWidget()
         self.list_layout = QVBoxLayout(self.host)
-        self.list_layout.setContentsMargins(0, 5, 10, 10)
-        self.list_layout.setSpacing(8)
+        self.list_layout.setContentsMargins(0, 2, 10, 10)
+        self.list_layout.setSpacing(10)
         self.scroll.setWidget(self.host)
         root.addWidget(self.scroll)
         self.refresh()
