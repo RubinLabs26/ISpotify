@@ -95,7 +95,7 @@ def _is_text_input(widget) -> bool:
 class EasterEggs(QObject):
     """Watch the main window's keyboard for secret sequences."""
 
-    konamiEntered = Signal()
+    discoRequested = Signal()
     vinylToggled = Signal()
     zenToggled = Signal()
     escapePressed = Signal()
@@ -107,6 +107,7 @@ class EasterEggs(QObject):
         self._words = {
             "vinyl": (SequenceDetector("vinyl"), self.vinylToggled),
             "zen": (SequenceDetector("zen"), self.zenToggled),
+            "disco": (SequenceDetector("disco"), self.discoRequested),
         }
         app = QApplication.instance()
         if app is not None:
@@ -135,7 +136,7 @@ class EasterEggs(QObject):
         if _is_text_input(QApplication.focusWidget()):
             return
         if self._konami.feed(event.key()):
-            self.konamiEntered.emit()
+            self.discoRequested.emit()
         text = event.text().lower()
         if len(text) != 1 or not text.isprintable():
             return

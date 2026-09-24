@@ -275,7 +275,7 @@ class MainWindow(QMainWindow):
         self._disco_timer.timeout.connect(self._disco_tick)
         self._disco_ticks_left = 0
         self.easter_eggs = EasterEggs(self)
-        self.easter_eggs.konamiEntered.connect(self._start_disco)
+        self.easter_eggs.discoRequested.connect(self._start_disco)
         self.easter_eggs.vinylToggled.connect(self._toggle_vinyl)
         self.easter_eggs.zenToggled.connect(lambda: self._set_zen(not self._zen))
         self.easter_eggs.escapePressed.connect(lambda: self._set_zen(False))

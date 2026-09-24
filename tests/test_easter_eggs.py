@@ -86,7 +86,7 @@ class EasterEggFilterTests(unittest.TestCase):
         self.window.setCentralWidget(central)
         self.eggs = EasterEggs(self.window)
         self.fired = []
-        self.eggs.konamiEntered.connect(lambda: self.fired.append("konami"))
+        self.eggs.discoRequested.connect(lambda: self.fired.append("disco"))
         self.eggs.vinylToggled.connect(lambda: self.fired.append("vinyl"))
         self.eggs.zenToggled.connect(lambda: self.fired.append("zen"))
         self.eggs.escapePressed.connect(lambda: self.fired.append("escape"))
@@ -106,7 +106,11 @@ class EasterEggFilterTests(unittest.TestCase):
         self.type_word("vinyl")
         for key in KONAMI_CODE:
             self.assertFalse(self.eggs.eventFilter(self.window, key_event(key)))
-        self.assertEqual(self.fired, ["zen", "vinyl", "konami"])
+        self.assertEqual(self.fired, ["zen", "vinyl", "disco"])
+
+    def test_typing_disco_starts_disco_mode(self):
+        self.type_word("disco")
+        self.assertEqual(self.fired, ["disco"])
 
     def test_escape_is_reported(self):
         self.eggs.eventFilter(self.window, key_event(Qt.Key_Escape))

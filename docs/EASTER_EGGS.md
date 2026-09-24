@@ -4,7 +4,7 @@
 
 | Secret | How to find it | What happens |
 |---|---|---|
-| **Disco mode** | Type the Konami code: <kbd>↑</kbd> <kbd>↑</kbd> <kbd>↓</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> <kbd>←</kbd> <kbd>→</kbd> <kbd>B</kbd> <kbd>A</kbd> | For twelve seconds the brand dot and the playback bar cycle through soft colours, then quietly return to normal. |
+| **Disco mode** | Type `disco`. The Konami code (<kbd>↑</kbd> <kbd>↑</kbd> <kbd>↓</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> <kbd>←</kbd> <kbd>→</kbd> <kbd>B</kbd> <kbd>A</kbd>) also works | For twelve seconds the brand dot and the playback bar cycle through soft colours, then quietly return to normal. |
 | **Vinyl mode** | Type `vinyl` | The player artwork becomes a record that spins while music plays and stops when you pause. Type `vinyl` again to turn it off. |
 | **Zen mode** | Type `zen` | The sidebar slides away, leaving only the page and the player. Press <kbd>Esc</kbd> or type `zen` again to bring it back. |
 | **The vault** | Click the iSpotify logo five times quickly | A card shows your library stats: songs, favorites, playlists and total plays. |
