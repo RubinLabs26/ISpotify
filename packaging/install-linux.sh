@@ -4,7 +4,7 @@ set -Eeuo pipefail
 REPOSITORY="RubinLabs26/ISpotify"
 REPOSITORY_URL="https://github.com/$REPOSITORY/releases/latest/download"
 SOURCE_URL="https://raw.githubusercontent.com/$REPOSITORY/main/packaging/apt"
-PACKAGE_KEY_FINGERPRINT="FBF50CE755A06C567BFAE4D81C9D795EC0272267"
+PACKAGE_KEY_FINGERPRINT="B6D410B1FD6C0AEB474496D9457FB4CE4AF48919"
 APP_NAME="iSpotify"
 ASSET_NAME="ISpotify-linux-x86_64"
 ICON_NAME="ispotify-logo.png"
