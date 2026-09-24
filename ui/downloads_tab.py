@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Signal
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QSize, Signal
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QProgressBar, QScrollArea, QSizePolicy,
     QVBoxLayout, QWidget,
 )
 
-from ui.widgets import EmptyState, MotionButton, standard_icon
+from ui.widgets import EmptyState, MotionButton, enable_smooth_scroll, standard_icon
 
 
 class DownloadRow(QFrame):
@@ -38,6 +38,9 @@ class DownloadRow(QFrame):
         self.progress = QProgressBar()
         self.progress.setObjectName("downloadProgress")
         self.progress.setRange(0, 100)
+        self._progress_anim = QPropertyAnimation(self.progress, b"value", self)
+        self._progress_anim.setDuration(420)
+        self._progress_anim.setEasingCurve(QEasingCurve.OutCubic)
         copy.addWidget(self.progress)
         layout.addLayout(copy, 1)
         actions = QVBoxLayout()
@@ -66,7 +69,7 @@ class DownloadRow(QFrame):
 
     def update_job(self, job: dict) -> None:
         value = max(0, min(100, int(job.get("progress") or 0)))
-        self.progress.setValue(value)
+        self.set_progress(value)
         state = job["status"]
         description = {
             "active": "Downloading audio" if value < 100 else "Converting to MP3",
@@ -80,8 +83,20 @@ class DownloadRow(QFrame):
         if state == "failed":
             self.status.setToolTip(job.get("error") or "Download failed")
 
+    def set_progress(self, value: int) -> None:
+        """Glide forward between progress reports; jump straight back."""
+        self._progress_anim.stop()
+        # Rows are rebuilt whenever the queue changes; a fresh (hidden) row
+        # should show its saved progress at once rather than replay it.
+        if value <= self.progress.value() or not self.isVisible():
+            self.progress.setValue(value)
+            return
+        self._progress_anim.setStartValue(self.progress.value())
+        self._progress_anim.setEndValue(value)
+        self._progress_anim.start()
+
     def update_transfer(self, percent: int, speed: int, eta: int) -> None:
-        self.progress.setValue(percent)
+        self.set_progress(percent)
         if percent >= 100:
             self.status.setText("Converting to MP3")
             return
@@ -137,6 +152,7 @@ class DownloadsTab(QWidget):
         self.rows_layout.setContentsMargins(0, 0, 8, 0)
         self.rows_layout.setSpacing(10)
         self.scroll.setWidget(self.content)
+        enable_smooth_scroll(self.scroll)
         self.scroll.hide()
         root.addWidget(self.scroll, 1)
         self.rows: dict[str, DownloadRow] = {}
@@ -162,7 +178,7 @@ class DownloadsTab(QWidget):
     def update_progress(self, video_id: str, value: int) -> None:
         row = self.rows.get(video_id)
         if row:
-            row.progress.setValue(value)
+            row.set_progress(value)
             row.status.setText(
                 f"Downloading audio · {value}%" if value < 100
                 else "Converting to MP3"

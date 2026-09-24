@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QProcess, QPropertyAnimation, QTimer, QSize, Qt, QUrl
+from PySide6.QtCore import (
+    QEasingCurve, QPoint, QProcess, QPropertyAnimation, QTimer, QSize, Qt, QUrl,
+    QVariantAnimation,
+)
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtWidgets import QApplication, QGraphicsOpacityEffect, QMessageBox
@@ -21,13 +24,28 @@ from core.update_install import (
 from core.updater import RELEASE_PAGE, UpdateManager
 from core.version import APP_VERSION
 from ui.downloads_tab import DownloadsTab
+from ui.easter_eggs import (
+    DISCO_COLORS, EasterEggs, TapWatcher, VolumeElevenWatcher,
+)
 from ui.home_tab import HomeTab
 from ui.library_tab import LibraryTab
 from ui.player_widget import PlayerWidget
 from ui.search_tab import SearchTab
 from ui.settings_tab import SettingsTab
+from ui.theme import MOTION
 from ui.toast import ToastManager
-from ui.widgets import MotionButton, icon_button, standard_icon
+from ui.widgets import (
+    MotionButton, SlidingIndicator, icon_button, standard_icon,
+)
+
+SIDEBAR_WIDTH = 200
+BRAND_MARK_STYLE = "color: #f2f1ec; font-size: 10pt;"
+DISCO_TICK_MS = 90
+DISCO_TICKS = 12_000 // DISCO_TICK_MS
+
+
+def _count(value: int, noun: str) -> str:
+    return f"{value} {noun}{'' if value == 1 else 's'}"
 
 
 class MainWindow(QMainWindow):
@@ -60,6 +78,7 @@ class MainWindow(QMainWindow):
         self._discord_refresh_timer.setInterval(30_000)
         self._discord_refresh_timer.timeout.connect(self._sync_discord_presence)
         self._connect()
+        self._setup_easter_eggs()
         self._configure_discord(self.settings.discord_config())
         self.navigate("home")
         QTimer.singleShot(3000, self.updater.check)
@@ -115,9 +134,14 @@ class MainWindow(QMainWindow):
         self._pages_fade = QPropertyAnimation(
             self._pages_opacity, b"opacity", self
         )
-        self._pages_fade.setDuration(180)
+        self._pages_fade.setDuration(MOTION["slow"])
         self._pages_fade.setEasingCurve(QEasingCurve.OutQuint)
         self._pages_opacity.setOpacity(1.0)
+        # Incoming pages also rise a few pixels into place.
+        self._page_slide = QPropertyAnimation(self)
+        self._page_slide.setPropertyName(b"pos")
+        self._page_slide.setDuration(MOTION["slow"])
+        self._page_slide.setEasingCurve(QEasingCurve.OutCubic)
         self.home = HomeTab(self.library)
         self.search = SearchTab()
         self.library_page = LibraryTab(self.library)
@@ -138,22 +162,23 @@ class MainWindow(QMainWindow):
     def _build_sidebar(self):
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(200)
+        sidebar.setFixedWidth(SIDEBAR_WIDTH)
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(20, 24, 20, 18)
         layout.setSpacing(4)
         brand_row = QHBoxLayout()
         brand_row.setSpacing(8)
-        mark = QLabel("●")
-        mark.setStyleSheet("color: #f2f1ec; font-size: 10pt;")
-        mark.setFixedWidth(14)
-        brand = QLabel("iSpotify")
-        brand.setObjectName("brand")
-        brand_row.addWidget(mark)
-        brand_row.addWidget(brand)
+        self.brand_mark = QLabel("●")
+        self.brand_mark.setStyleSheet(BRAND_MARK_STYLE)
+        self.brand_mark.setFixedWidth(14)
+        self.brand_label = QLabel("iSpotify")
+        self.brand_label.setObjectName("brand")
+        brand_row.addWidget(self.brand_mark)
+        brand_row.addWidget(self.brand_label)
         brand_row.addStretch()
         layout.addLayout(brand_row)
         layout.addSpacing(28)
+        self.nav_indicator = SlidingIndicator(sidebar)
         for key, label, icon_name in (
             ("home", "Home", "SP_DirHomeIcon"),
             ("search", "Search", "SP_FileDialogContentsView"),
@@ -234,6 +259,117 @@ class MainWindow(QMainWindow):
         self.updater.failed.connect(self._on_update_failed)
         self.updater.downloadProgress.connect(self._on_update_progress)
         self.updater.downloadReady.connect(self._on_update_ready)
+
+    # -- secrets ------------------------------------------------------------
+    # Hidden on purpose; the full list lives in docs/EASTER_EGGS.md.
+
+    def _setup_easter_eggs(self) -> None:
+        self._zen = False
+        self._zen_anim = QVariantAnimation(self)
+        self._zen_anim.setDuration(MOTION["slow"])
+        self._zen_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._zen_anim.valueChanged.connect(self._apply_sidebar_width)
+        self._zen_anim.finished.connect(self._finish_zen_animation)
+        self._disco_timer = QTimer(self)
+        self._disco_timer.setInterval(DISCO_TICK_MS)
+        self._disco_timer.timeout.connect(self._disco_tick)
+        self._disco_ticks_left = 0
+        self.easter_eggs = EasterEggs(self)
+        self.easter_eggs.konamiEntered.connect(self._start_disco)
+        self.easter_eggs.vinylToggled.connect(self._toggle_vinyl)
+        self.easter_eggs.zenToggled.connect(lambda: self._set_zen(not self._zen))
+        self.easter_eggs.escapePressed.connect(lambda: self._set_zen(False))
+        self._vault_watcher = TapWatcher(
+            (self.brand_mark, self.brand_label), taps=5, window=2.0, parent=self
+        )
+        self._vault_watcher.triggered.connect(self._open_vault)
+        self._eleven_watcher = VolumeElevenWatcher(
+            self.player.volume_slider, parent=self
+        )
+        self._eleven_watcher.triggered.connect(self._go_to_eleven)
+
+    def _start_disco(self) -> None:
+        self._disco_ticks_left = DISCO_TICKS
+        if not self._disco_timer.isActive():
+            self._disco_timer.start()
+        self.toast_manager.show_toast(
+            "Cheat code accepted", "Disco mode for twelve seconds. Dance responsibly.",
+            "success",
+        )
+
+    def _disco_tick(self) -> None:
+        self._disco_ticks_left -= 1
+        if self._disco_ticks_left <= 0:
+            self._stop_disco()
+            return
+        color = DISCO_COLORS[self._disco_ticks_left % len(DISCO_COLORS)]
+        self.brand_mark.setStyleSheet(f"color: {color}; font-size: 10pt;")
+        self.player.position_slider.setStyleSheet(
+            f"QSlider::sub-page:horizontal {{ background: {color}; border-radius: 2px; }}"
+        )
+
+    def _stop_disco(self) -> None:
+        self._disco_timer.stop()
+        self._disco_ticks_left = 0
+        self.brand_mark.setStyleSheet(BRAND_MARK_STYLE)
+        self.player.position_slider.setStyleSheet("")
+
+    def _toggle_vinyl(self) -> None:
+        enabled = not self.player.vinyl_mode()
+        self.player.set_vinyl_mode(enabled)
+        if enabled:
+            self.toast_manager.show_toast(
+                "Vinyl mode", "Spinning at 33⅓ rpm. Type vinyl again to stop.", "success"
+            )
+        else:
+            self.toast_manager.show_toast("Vinyl mode off", "Back to digital.", "info")
+
+    def _set_zen(self, enabled: bool) -> None:
+        if enabled == self._zen:
+            return
+        self._zen = enabled
+        self._zen_anim.stop()
+        start = self.sidebar.width() if self.sidebar.isVisible() else 0
+        self.sidebar.show()
+        self._zen_anim.setStartValue(start)
+        self._zen_anim.setEndValue(0 if enabled else SIDEBAR_WIDTH)
+        self._zen_anim.start()
+        if enabled:
+            self.toast_manager.show_toast(
+                "Zen mode", "Just you and the music. Press Esc or type zen to return.",
+                "info",
+            )
+
+    def _apply_sidebar_width(self, width) -> None:
+        self.sidebar.setFixedWidth(max(0, int(width)))
+
+    def _finish_zen_animation(self) -> None:
+        if self._zen:
+            self.sidebar.hide()
+        else:
+            self.sidebar.setFixedWidth(SIDEBAR_WIDTH)
+
+    def _open_vault(self) -> None:
+        songs = self.library.all_songs()
+        plays = sum(int(song.get("play_count") or 0) for song in songs)
+        stats = [
+            _count(len(songs), "song"),
+            _count(len(self.library.favorites()), "favorite"),
+            _count(len(self.library.all_playlists()), "playlist"),
+            _count(plays, "play"),
+        ]
+        self.toast_manager.show_toast(
+            "You found the vault",
+            " · ".join(stats) + f"\niSpotify v{APP_VERSION}, made with care by Rubin Labs.",
+            "success", timeout=6500,
+        )
+
+    def _go_to_eleven(self) -> None:
+        self.toast_manager.show_toast(
+            "This one goes to eleven",
+            "It's one louder. Your speakers are grateful we stopped at 100.",
+            "info",
+        )
 
     def _on_update_available(self, version: str) -> None:
         first_notice = self._update_version != version
@@ -389,15 +525,32 @@ class MainWindow(QMainWindow):
         self.pages.setCurrentWidget(widget)
         if self._current_page != page:
             self._pages_fade.stop()
-            self._pages_fade.setStartValue(0.82)
+            self._pages_fade.setStartValue(0.35)
             self._pages_fade.setEndValue(1.0)
             self._pages_fade.start()
+            self._slide_in(widget)
         self.page_title.setText(title)
         self.page_subtitle.setText(subtitle)
         for key, button in self._nav_buttons:
             button.setChecked(key == page)
+            if key == page:
+                self.nav_indicator.track(button)
         self._current_page = page
         self._update_back_button()
+
+    def _slide_in(self, widget) -> None:
+        previous = self._page_slide.targetObject()
+        self._page_slide.stop()
+        rest = self.pages.contentsRect().topLeft()
+        if previous is not None and previous is not widget:
+            previous.move(rest)
+        if not self.isVisible():
+            widget.move(rest)
+            return
+        self._page_slide.setTargetObject(widget)
+        self._page_slide.setStartValue(rest + QPoint(0, 14))
+        self._page_slide.setEndValue(rest)
+        self._page_slide.start()
 
     def _go_back(self):
         if self._current_page == "search" and self.search.go_back():
@@ -728,6 +881,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         # Release the FFmpeg decoder before Qt tears down the application.
         self._shutting_down = True
+        self._disco_timer.stop()
         self.downloader.cancel()
         self.discord_presence.close()
         self.player.close()

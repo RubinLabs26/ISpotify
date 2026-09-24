@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from core.library import Library
 from ui.widgets import (
     ArtworkLabel, EmptyState, MotionButton, PlaylistArtworkLabel, StatusDot,
-    format_duration, icon_button, standard_icon,
+    enable_smooth_scroll, format_duration, icon_button, standard_icon,
 )
 
 
@@ -313,6 +313,7 @@ class LibraryTab(QWidget):
         self.list_layout.setContentsMargins(0, 2, 10, 10)
         self.list_layout.setSpacing(10)
         self.scroll.setWidget(self.host)
+        enable_smooth_scroll(self.scroll)
         root.addWidget(self.scroll)
         self.refresh()
 

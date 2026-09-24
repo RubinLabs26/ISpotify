@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 
 from core import cookies
 from core.version import APP_VERSION
-from ui.widgets import MotionButton, StatusDot
+from ui.widgets import MotionButton, StatusDot, enable_smooth_scroll
 
 COOKIE_PLACEHOLDER = "Paste your exported cookies here (JSON array, or a cookies.txt)…"
 
@@ -63,6 +63,7 @@ class SettingsTab(QWidget):
         root.setContentsMargins(0, 0, 8, 24)
         root.setSpacing(18)
         scroll.setWidget(content)
+        enable_smooth_scroll(scroll)
         outer.addWidget(scroll)
 
         self._settings = QSettings("Rubin Labs", "iSpotify")

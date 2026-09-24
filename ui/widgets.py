@@ -6,13 +6,16 @@ import hashlib
 from pathlib import Path
 
 from PySide6.QtCore import (
-    QEasingCurve, QEvent, QPropertyAnimation, QSize, Qt, QUrl,
+    QAbstractAnimation, QEasingCurve, QEvent, QObject, QPointF,
+    QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl, QVariantAnimation,
 )
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import (
+    QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap,
+)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (
-    QApplication, QGraphicsDropShadowEffect, QLabel, QPushButton, QSizePolicy,
-    QStyle,
+    QApplication, QFrame, QGraphicsDropShadowEffect, QLabel, QPushButton,
+    QSizePolicy, QStyle,
 )
 
 from ui.theme import COLORS, MOTION
@@ -173,9 +176,73 @@ class MotionButton(QPushButton):
     glitches on some Qt/Wayland combinations and could swallow release events.
     """
 
+    HOVER_SCALE = 1.12
+    PRESS_SCALE = 0.84
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setCursor(Qt.PointingHandCursor)
+        self._icon_base = None
+        self._icon_anim = None
+
+    def enable_icon_motion(self) -> None:
+        """Let the glyph swell on hover and squish on press.
+
+        Only the icon size is animated, never the button geometry or a
+        graphics effect, so layout and click delivery are unaffected. Meant
+        for fixed-size icon buttons, where the frame cannot grow with it.
+        """
+        self._icon_base = QSize(self.iconSize())
+        self._icon_anim = QVariantAnimation(self)
+        self._icon_anim.valueChanged.connect(self._apply_icon_size)
+
+    def setIconSize(self, size):
+        super().setIconSize(size)
+        if self._icon_anim is not None:
+            self._icon_anim.stop()
+            self._icon_base = QSize(size)
+
+    def _apply_icon_size(self, size) -> None:
+        if isinstance(size, QSize):
+            QPushButton.setIconSize(self, size)
+
+    def _animate_icon(self, scale: float, duration: int, easing) -> None:
+        if self._icon_anim is None:
+            return
+        target = QSize(
+            round(self._icon_base.width() * scale),
+            round(self._icon_base.height() * scale),
+        )
+        self._icon_anim.stop()
+        self._icon_anim.setDuration(duration)
+        self._icon_anim.setEasingCurve(easing)
+        self._icon_anim.setStartValue(QSize(self.iconSize()))
+        self._icon_anim.setEndValue(target)
+        self._icon_anim.start()
+
+    def _rest_scale(self) -> float:
+        return self.HOVER_SCALE if self.isEnabled() and self.underMouse() else 1.0
+
+    def enterEvent(self, event):
+        super().enterEvent(event)
+        if self.isEnabled():
+            self._animate_icon(self.HOVER_SCALE, MOTION["base"], QEasingCurve.OutCubic)
+
+    def leaveEvent(self, event):
+        super().leaveEvent(event)
+        self._animate_icon(1.0, MOTION["base"], QEasingCurve.OutCubic)
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        if event.button() == Qt.LeftButton and self.isEnabled():
+            self._animate_icon(self.PRESS_SCALE, 90, QEasingCurve.OutQuad)
+
+    def mouseReleaseEvent(self, event):
+        # clicked handlers run inside super(); screens only schedule a
+        # replaced button for deletion, so it is still alive afterwards.
+        super().mouseReleaseEvent(event)
+        if event.button() == Qt.LeftButton:
+            self._animate_icon(self._rest_scale(), 320, QEasingCurve.OutBack)
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -184,6 +251,9 @@ class MotionButton(QPushButton):
             self.setCursor(
                 Qt.PointingHandCursor if self.isEnabled() else Qt.ArrowCursor
             )
+            if not self.isEnabled() and self._icon_anim is not None:
+                self._icon_anim.stop()
+                QPushButton.setIconSize(self, self._icon_base)
 
 
 def icon_button(icon_name: str, tooltip: str, object_name: str = "iconButton",
@@ -201,7 +271,110 @@ def icon_button(icon_name: str, tooltip: str, object_name: str = "iconButton",
     button.setObjectName(object_name)
     button.setToolTip(tooltip)
     button.setCursor(Qt.PointingHandCursor)
+    button.enable_icon_motion()
     return button
+
+
+class SmoothScroller(QObject):
+    """Glide a scroll area to each mouse-wheel step instead of jumping.
+
+    Touchpads and high-resolution wheels already deliver pixel-precise
+    deltas, so those pass straight through to Qt untouched. Modified wheel
+    events (zoom, horizontal) are left alone as well.
+    """
+
+    def __init__(self, area):
+        super().__init__(area)
+        self._bar = area.verticalScrollBar()
+        self._target = None
+        self._anim = QPropertyAnimation(self._bar, b"value", self)
+        self._anim.setDuration(MOTION["slow"])
+        self._anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._bar.sliderPressed.connect(self._anim.stop)
+        area.viewport().installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if event.type() != QEvent.Wheel:
+            return False
+        if (
+            event.modifiers() != Qt.NoModifier
+            or not event.pixelDelta().isNull()
+            or event.phase() != Qt.NoScrollPhase
+            or event.angleDelta().y() == 0
+        ):
+            return False
+        bar = self._bar
+        if bar.maximum() <= bar.minimum():
+            return False
+        running = self._anim.state() == QAbstractAnimation.Running
+        base = self._target if running and self._target is not None else bar.value()
+        step = (
+            -event.angleDelta().y() / 120
+            * QApplication.wheelScrollLines() * bar.singleStep()
+        )
+        self._target = max(bar.minimum(), min(bar.maximum(), round(base + step)))
+        self._anim.stop()
+        self._anim.setStartValue(bar.value())
+        self._anim.setEndValue(self._target)
+        self._anim.start()
+        return True
+
+
+def enable_smooth_scroll(area) -> SmoothScroller:
+    return SmoothScroller(area)
+
+
+class SlidingIndicator(QFrame):
+    """A selection highlight that glides between sibling widgets.
+
+    Sits beneath the tracked widgets (it is transparent to the mouse) and
+    re-snaps whenever the parent is shown or resized, so it can never be
+    left behind by a layout change.
+    """
+
+    def __init__(self, parent, object_name: str = "navIndicator"):
+        super().__init__(parent)
+        self.setObjectName(object_name)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._target = None
+        self._anim = QPropertyAnimation(self, b"geometry", self)
+        self._anim.setDuration(MOTION["slow"])
+        self._anim.setEasingCurve(QEasingCurve.OutCubic)
+        self.hide()
+        parent.installEventFilter(self)
+
+    def track(self, widget, animate: bool = True) -> None:
+        self._target = widget
+        if not animate or not self.isVisible() or not self.parentWidget().isVisible():
+            self._snap()
+            return
+        self._anim.stop()
+        self._anim.setStartValue(self.geometry())
+        self._anim.setEndValue(widget.geometry())
+        self._anim.start()
+
+    def _snap(self) -> None:
+        if self._target is None:
+            return
+        self._anim.stop()
+        self.setGeometry(self._target.geometry())
+        self.lower()
+        self.show()
+
+    def _resync(self) -> None:
+        if self._target is None:
+            return
+        if self._anim.state() == QAbstractAnimation.Running:
+            # Keep gliding, just toward wherever the layout moved the target.
+            self._anim.setEndValue(self._target.geometry())
+        else:
+            self._snap()
+
+    def eventFilter(self, obj, event):
+        if event.type() in (QEvent.Show, QEvent.Resize, QEvent.LayoutRequest):
+            # Wait for the layout to place the tracked widget first.
+            QTimer.singleShot(0, self, self._resync)
+        return False
 
 
 class ArtworkLabel(QLabel):
@@ -210,6 +383,10 @@ class ArtworkLabel(QLabel):
         self.title = title
         self.artwork_size = size
         self._thumbnail_url = ""
+        self._vinyl = False
+        self._spin_angle = 0.0
+        self._spin = None
+        self._tile_style = ""
         self._network = QNetworkAccessManager(self)
         self.setFixedSize(size)
         self.setPixmap(artwork_pixmap(title, size))
@@ -224,6 +401,100 @@ class ArtworkLabel(QLabel):
 
     def set_artwork(self, pixmap: QPixmap) -> None:
         self.setPixmap(thumbnail_pixmap(pixmap, self.artwork_size))
+
+    # -- vinyl mode (a hidden treat, see ui/easter_eggs.py) -----------------
+
+    def is_vinyl(self) -> bool:
+        return self._vinyl
+
+    def set_vinyl(self, enabled: bool) -> None:
+        """Draw the artwork as the label of a record that can spin."""
+        enabled = bool(enabled)
+        if enabled == self._vinyl:
+            return
+        self._vinyl = enabled
+        if enabled:
+            self._tile_style = self.styleSheet()
+            self.setStyleSheet("background: transparent; border: none; padding: 0px;")
+            if self._spin is None:
+                self._spin = QVariantAnimation(self)
+                self._spin.setStartValue(0.0)
+                self._spin.setEndValue(360.0)
+                self._spin.setDuration(3600)
+                self._spin.setLoopCount(-1)
+                self._spin.valueChanged.connect(self._set_spin_angle)
+        else:
+            if self._spin is not None:
+                self._spin.stop()
+            self._spin_angle = 0.0
+            self.setStyleSheet(self._tile_style)
+        self.update()
+
+    def set_spinning(self, spinning: bool) -> None:
+        if not self._vinyl or self._spin is None:
+            return
+        state = self._spin.state()
+        if spinning:
+            if state == QAbstractAnimation.Paused:
+                self._spin.resume()
+            elif state == QAbstractAnimation.Stopped:
+                self._spin.start()
+        elif state == QAbstractAnimation.Running:
+            self._spin.pause()
+
+    def is_spinning(self) -> bool:
+        return (
+            self._spin is not None
+            and self._spin.state() == QAbstractAnimation.Running
+        )
+
+    def _set_spin_angle(self, angle) -> None:
+        self._spin_angle = float(angle)
+        self.update()
+
+    def paintEvent(self, event):
+        if not self._vinyl:
+            super().paintEvent(event)
+            return
+        side = min(self.width(), self.height()) - 2
+        center = QPointF(self.width() / 2, self.height() / 2)
+        disc = QRectF(center.x() - side / 2, center.y() - side / 2, side, side)
+        painter = QPainter(self)
+        painter.setRenderHints(
+            QPainter.Antialiasing | QPainter.SmoothPixmapTransform
+        )
+        painter.setPen(QPen(QColor(255, 255, 255, 36), 1))
+        painter.setBrush(QColor("#0b0b0c"))
+        painter.drawEllipse(disc)
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor(255, 255, 255, 14), 1))
+        for ratio in (0.82, 0.68):
+            groove = side * ratio / 2
+            painter.drawEllipse(center, groove, groove)
+
+        painter.translate(center)
+        painter.rotate(self._spin_angle)
+        label_radius = side * 0.28
+        label = QRectF(-label_radius, -label_radius, label_radius * 2, label_radius * 2)
+        clip = QPainterPath()
+        clip.addEllipse(label)
+        painter.save()
+        painter.setClipPath(clip)
+        painter.fillRect(label, QColor(COLORS["surface_active"]))
+        artwork = self.pixmap()
+        if artwork is not None and not artwork.isNull():
+            painter.drawPixmap(label, artwork, QRectF(artwork.rect()))
+        painter.restore()
+        # A small sheen mark so the spin reads even on symmetric artwork.
+        painter.setPen(QPen(QColor(255, 255, 255, 60), 1.4, Qt.SolidLine, Qt.RoundCap))
+        painter.drawArc(
+            QRectF(-side * 0.38, -side * 0.38, side * 0.76, side * 0.76),
+            30 * 16, 40 * 16,
+        )
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(COLORS["background"]))
+        painter.drawEllipse(QPointF(0, 0), 2.2, 2.2)
+        painter.end()
 
     def set_thumbnail(self, thumbnail_url: str) -> None:
         """Load remote artwork asynchronously and retain the music-icon fallback."""
