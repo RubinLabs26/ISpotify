@@ -1,0 +1,131 @@
+name: Release bot
+
+on:
+  pull_request_target:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Release type for the current main branch
+        required: true
+        type: choice
+        options: [patch, minor, major]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: stable-release-bot
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: >-
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.pull_request.merged == true &&
+       !contains(github.event.pull_request.labels.*.name, 'release:skip') &&
+       !contains(github.event.pull_request.labels.*.name, 'bot:release'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          token: ${{ secrets.RELEASE_BOT_TOKEN }}
+          fetch-depth: 0
+      - name: Select release type
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_BUMP: ${{ inputs.bump }}
+          LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            bump="$REQUESTED_BUMP"
+          elif jq -e 'index("release:major") != null' <<<"$LABELS_JSON" >/dev/null; then
+            bump=major
+          elif jq -e 'index("release:minor") != null' <<<"$LABELS_JSON" >/dev/null; then
+            bump=minor
+          else
+            bump=patch
+          fi
+          echo "bump=$bump" >> "$GITHUB_OUTPUT"
+      - name: Prepare version and notes
+        id: version
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title || 'Manual stable release' }}
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
+          PR_NUMBER: ${{ github.event.pull_request.number || 0 }}
+          PR_URL: ${{ github.event.pull_request.html_url || github.server_url }}
+          BUMP: ${{ steps.release.outputs.bump }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          version="$(python tools/release_bot.py prepare \
+            --bump "$BUMP" --title "$PR_TITLE" --body "$PR_BODY" \
+            --number "$PR_NUMBER" --url "$PR_URL")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Open release pull request
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SOURCE_PR: ${{ github.event.pull_request.number || 0 }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          branch="bot/release-v$VERSION"
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v$VERSION already exists; nothing to prepare."
+            exit 0
+          fi
+          git config user.name "iSpotify Release Bot"
+          git config user.email "releases@ispotify.invalid"
+          git switch -c "$branch"
+          git add README.md core/version.py packaging tests .github/release-notes
+          git commit -m "Release v$VERSION"
+          git push --force-with-lease origin "$branch"
+          pr_url="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json url --jq '.[0].url')"
+          if [[ -z "$pr_url" ]]; then
+            pr_url="$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+              --title "Release v$VERSION" \
+              --body "Automated stable release prepared from merged PR #$SOURCE_PR. The release remains draft until Windows and Linux builds pass." \
+              --label automated --label automerge --label bot:release --label release:skip)"
+          fi
+          gh pr edit "$pr_url" --repo "$GITHUB_REPOSITORY" \
+            --add-label automated --add-label automerge --add-label bot:release --add-label release:skip
+
+  tag:
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'bot:release')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          token: ${{ secrets.RELEASE_BOT_TOKEN }}
+          fetch-depth: 0
+      - name: Create draft release and tag
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          version="$(python -c 'from core.version import APP_VERSION; print(APP_VERSION)')"
+          tag="v$version"
+          notes=".github/release-notes/$tag.md"
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$MERGE_SHA" \
+              --title "iSpotify $version" --notes-file "$notes" --draft
+          fi
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            git config user.name "iSpotify Release Bot"
+            git config user.email "releases@ispotify.invalid"
+            git tag -a "$tag" "$MERGE_SHA" -m "iSpotify $version"
+            git push origin "$tag"
+          fi

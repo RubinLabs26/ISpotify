@@ -1,0 +1,125 @@
+name: Pull request bot
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  classify-and-merge:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Classify release impact
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const labels = new Set(pr.labels.map(label => label.name));
+            const releaseLabels = [...labels].filter(label => label.startsWith('release:'));
+            const eventLabel = context.payload.label?.name || '';
+            let selected = eventLabel.startsWith('release:') ? eventLabel : releaseLabels[0];
+
+            if (eventLabel.startsWith('release:')) {
+              for (const label of releaseLabels) {
+                if (label !== eventLabel) {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    name: label,
+                  });
+                }
+              }
+            }
+
+            if (!selected) {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                per_page: 100,
+              });
+              const paths = files.map(file => file.filename);
+              const docsOnly = paths.length > 0 && paths.every(path =>
+                path.startsWith('docs/') ||
+                path === 'README.md' ||
+                path.endsWith('.md')
+              );
+              const title = pr.title.toLowerCase();
+              if (docsOnly) selected = 'release:skip';
+              else if (/breaking|major/.test(title)) selected = 'release:major';
+              else if (labels.has('enhancement') || /^(add|feature|feat)[(: ]/.test(title)) selected = 'release:minor';
+              else selected = 'release:patch';
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: [selected],
+              });
+            }
+
+            const marker = '<!-- ispotify-release-bot -->';
+            const explanation = {
+              'release:major': 'major release',
+              'release:minor': 'feature release',
+              'release:patch': 'patch release',
+              'release:skip': 'no release',
+            }[selected] || selected;
+            const body = `${marker}\n🤖 **Repository bot:** this PR is classified as **${explanation}** (` +
+              `\`${selected}\`). After merge, protected checks and both platform builds must pass ` +
+              `before a stable release is published. Change the \`release:*\` label to override this.`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              per_page: 100,
+            });
+            const existing = comments.find(comment => comment.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body,
+              });
+            }
+
+      - name: Enable protected auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN || github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          trusted=false
+          case "$ASSOCIATION" in
+            OWNER|MEMBER|COLLABORATOR) trusted=true ;;
+          esac
+          labeled=false
+          if jq -e 'index("automerge") != null' <<<"$LABELS_JSON" >/dev/null; then
+            labeled=true
+          fi
+          if [[ "$AUTHOR" == "dependabot[bot]" ]] && \
+             ! jq -e 'index("release:major") != null' <<<"$LABELS_JSON" >/dev/null; then
+            labeled=true
+          fi
+          if [[ "$trusted" == true || "$labeled" == true ]]; then
+            gh pr merge --repo "$GITHUB_REPOSITORY" --auto --squash "$PR_URL"
+          else
+            echo "Waiting for a maintainer to add the automerge label."
+          fi

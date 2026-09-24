@@ -14,6 +14,7 @@ updates:
       - dependencies
       - python
       - automated
+      - automerge
     commit-message:
       prefix: deps
       include: scope
@@ -38,6 +39,7 @@ updates:
       - dependencies
       - github-actions
       - automated
+      - automerge
     commit-message:
       prefix: ci
       include: scope
