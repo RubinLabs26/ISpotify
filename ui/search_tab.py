@@ -8,8 +8,8 @@ from PySide6.QtWidgets import (
 
 from core.searcher import PlaylistResult, Searcher
 from ui.widgets import (
-    ArtworkLabel, EmptyState, MotionButton, format_duration, icon_button,
-    standard_icon,
+    ArtworkLabel, EmptyState, MotionButton, PlaylistArtworkLabel,
+    enable_smooth_scroll, format_duration, icon_button, standard_icon,
 )
 
 
@@ -30,7 +30,9 @@ class SearchResultCard(QFrame):
         self.select_box.setToolTip("Select for batch download")
         self.select_box.stateChanged.connect(self._selection_changed)
         layout.addWidget(self.select_box)
-        self.artwork = ArtworkLabel(result.title, QSize(108, 64))
+        self.artwork = ArtworkLabel(
+            result.title, QSize(108, 64), result.thumbnail_url
+        )
         layout.addWidget(self.artwork)
         text = QVBoxLayout()
         text.setSpacing(3)
@@ -70,7 +72,9 @@ class PlaylistResultCard(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 10, 14, 10)
         layout.setSpacing(14)
-        self.artwork = ArtworkLabel(playlist.title, QSize(108, 78))
+        self.artwork = PlaylistArtworkLabel(
+            playlist.title, playlist.playlist_id, QSize(108, 78)
+        )
         layout.addWidget(self.artwork)
         copy = QVBoxLayout()
         title = QLabel(playlist.title)
@@ -103,10 +107,10 @@ class PlaylistTrackCard(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(12)
-        number = QLabel("♪")
-        number.setObjectName("muted")
-        number.setFixedWidth(16)
-        layout.addWidget(number)
+        artwork = ArtworkLabel(
+            track.title, QSize(56, 42), track.thumbnail_url
+        )
+        layout.addWidget(artwork)
         copy = QVBoxLayout()
         title = QLabel(track.title)
         title.setObjectName("cardTitle")
@@ -212,6 +216,7 @@ class SearchTab(QWidget):
         ))
         self.results_layout.addStretch()
         self.scroll.setWidget(self.results_host)
+        enable_smooth_scroll(self.scroll)
         root.addWidget(self.scroll, 1)
         self._set_mode("songs")
 
@@ -356,7 +361,9 @@ class SearchTab(QWidget):
         back = icon_button("SP_ArrowLeft", "Back to playlist results", "backButton")
         back.clicked.connect(self._restore_playlist_search)
         header_layout.addWidget(back, 0, Qt.AlignTop)
-        artwork = ArtworkLabel(playlist.title, QSize(140, 100))
+        artwork = PlaylistArtworkLabel(
+            playlist.title, playlist.playlist_id, QSize(140, 100)
+        )
         header_layout.addWidget(artwork)
         copy = QVBoxLayout()
         title = QLabel(playlist.title)

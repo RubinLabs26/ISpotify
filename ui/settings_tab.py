@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, QSettings, QThread, Signal, Slot
+from PySide6.QtCore import QObject, QSettings, QThread, QUrl, Signal, Slot
+from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox, QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolicy,
     QTextEdit, QVBoxLayout, QWidget,
 )
 
 from core import cookies
-from ui.widgets import MotionButton, StatusDot
+from core.version import APP_VERSION
+from ui.widgets import MotionButton, StatusDot, enable_smooth_scroll
 
 COOKIE_PLACEHOLDER = "Paste your exported cookies here (JSON array, or a cookies.txt)…"
 
@@ -39,9 +41,12 @@ class CookieValidationWorker(QObject):
 
 class SettingsTab(QWidget):
     statusChanged = Signal(str)
+    discordStatusChanged = Signal(str)
     discordChanged = Signal(bool)
     discordLoginRequested = Signal()
     discordLogoutRequested = Signal()
+    updateCheckRequested = Signal()
+    updateInstallRequested = Signal()
 
     def __init__(self):
         super().__init__()
@@ -58,13 +63,14 @@ class SettingsTab(QWidget):
         root.setContentsMargins(0, 0, 8, 24)
         root.setSpacing(18)
         scroll.setWidget(content)
+        enable_smooth_scroll(scroll)
         outer.addWidget(scroll)
 
         self._settings = QSettings("Rubin Labs", "iSpotify")
         discord_card = QFrame()
         discord_card.setObjectName("card")
         discord_layout = QVBoxLayout(discord_card)
-        discord_layout.setContentsMargins(20, 16, 20, 16)
+        discord_layout.setContentsMargins(20, 18, 20, 18)
         discord_layout.setSpacing(7)
         discord_header = QHBoxLayout()
         discord_title = QLabel("Discord Rich Presence")
@@ -91,10 +97,57 @@ class SettingsTab(QWidget):
         self.discord_account_button.clicked.connect(self._on_discord_account)
         discord_config.addWidget(self.discord_account_button)
         discord_layout.addLayout(discord_config)
+        self._discord_authorization_url = ""
+        self.discord_auth_panel = QWidget()
+        auth_layout = QHBoxLayout(self.discord_auth_panel)
+        auth_layout.setContentsMargins(0, 3, 0, 0)
+        auth_layout.setSpacing(10)
+        self.discord_auth_help = QLabel(
+            "If the browser did not open, open or copy the authorization link."
+        )
+        self.discord_auth_help.setObjectName("muted")
+        self.discord_auth_help.setWordWrap(True)
+        auth_layout.addWidget(self.discord_auth_help, 1)
+        self.discord_open_button = MotionButton("Open link")
+        self.discord_open_button.setObjectName("ghostButton")
+        self.discord_open_button.clicked.connect(self._open_discord_link)
+        auth_layout.addWidget(self.discord_open_button)
+        self.discord_copy_button = MotionButton("Copy link")
+        self.discord_copy_button.setObjectName("ghostButton")
+        self.discord_copy_button.clicked.connect(self._copy_discord_link)
+        auth_layout.addWidget(self.discord_copy_button)
+        self.discord_auth_panel.hide()
+        discord_layout.addWidget(self.discord_auth_panel)
         self.discord_status = QLabel("Discord activity is off")
         self.discord_status.setObjectName("muted")
         discord_layout.addWidget(self.discord_status)
         root.addWidget(discord_card)
+
+        update_card = QFrame()
+        update_card.setObjectName("card")
+        update_layout = QVBoxLayout(update_card)
+        update_layout.setContentsMargins(20, 18, 20, 18)
+        update_layout.setSpacing(8)
+        update_title = QLabel("App updates")
+        update_title.setObjectName("sectionTitle")
+        update_layout.addWidget(update_title)
+        self.update_status = QLabel(f"Installed version: v{APP_VERSION}")
+        self.update_status.setObjectName("secondary")
+        self.update_status.setWordWrap(True)
+        update_layout.addWidget(self.update_status)
+        update_actions = QHBoxLayout()
+        update_actions.addStretch()
+        self.update_check_button = MotionButton("Check for updates")
+        self.update_check_button.setObjectName("ghostButton")
+        self.update_check_button.clicked.connect(self.updateCheckRequested.emit)
+        update_actions.addWidget(self.update_check_button)
+        self.update_install_button = MotionButton("Download and install")
+        self.update_install_button.setObjectName("accentButton")
+        self.update_install_button.clicked.connect(self.updateInstallRequested.emit)
+        self.update_install_button.hide()
+        update_actions.addWidget(self.update_install_button)
+        update_layout.addLayout(update_actions)
+        root.addWidget(update_card)
 
         self.discord_toggle.setChecked(
             self._settings.value("discord/enabled", False, type=bool)
@@ -126,7 +179,7 @@ class SettingsTab(QWidget):
         steps = QFrame()
         steps.setObjectName("card")
         steps_layout = QVBoxLayout(steps)
-        steps_layout.setContentsMargins(20, 16, 20, 16)
+        steps_layout.setContentsMargins(20, 18, 20, 18)
         steps_layout.setSpacing(4)
         steps_title = QLabel("How to get them")
         steps_title.setObjectName("eyebrow")
@@ -192,6 +245,13 @@ class SettingsTab(QWidget):
     def discord_config(self) -> bool:
         return self.discord_toggle.isChecked()
 
+    def set_update_status(self, text: str, *, checking: bool = False,
+                          available: bool = False) -> None:
+        self.update_status.setText(text)
+        self.update_check_button.setEnabled(not checking)
+        self.update_install_button.setVisible(available)
+        self.update_install_button.setEnabled(available and not checking)
+
     def set_discord_status(self, connected: bool, text: str) -> None:
         self.discord_status.setText(text)
         self.discord_status.setStyleSheet(
@@ -209,12 +269,46 @@ class SettingsTab(QWidget):
         self.discord_account_button.setEnabled(
             "waiting" not in text.lower() and "restoring" not in text.lower()
         )
+        if connected:
+            self.discord_auth_panel.hide()
+            self._discord_authorization_url = ""
+
+    @Slot(str)
+    def open_discord_authorization(self, url: str) -> None:
+        self._discord_authorization_url = url
+        self.discord_auth_panel.show()
+        self.discord_auth_help.setText(
+            "Discord will open authorization in your browser. If it does not "
+            "appear, use Open link or Copy link."
+        )
+
+    def _open_discord_link(self) -> None:
+        if not self._discord_authorization_url:
+            return
+        if not QDesktopServices.openUrl(
+            QUrl(self._discord_authorization_url)
+        ):
+            self.discordStatusChanged.emit(
+                "warning::Could not open a browser. Copy the link instead."
+            )
+
+    def _copy_discord_link(self) -> None:
+        if not self._discord_authorization_url:
+            return
+        QGuiApplication.clipboard().setText(self._discord_authorization_url)
+        self.discordStatusChanged.emit(
+            "info::Discord authorization link copied to the clipboard."
+        )
 
     def _on_discord_account(self) -> None:
         self.discord_account_button.setEnabled(False)
         if self._discord_connected:
+            self.discord_auth_panel.hide()
+            self._discord_authorization_url = ""
             self.discordLogoutRequested.emit()
         else:
+            self.discord_auth_panel.hide()
+            self._discord_authorization_url = ""
             self.discordLoginRequested.emit()
 
     def _save_discord_settings(self) -> None:

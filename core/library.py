@@ -8,10 +8,19 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
+import uuid
 from datetime import datetime, timezone
 
 from core.paths import LIBRARY_FILE, migrate_legacy_storage
+
+
+def _youtube_thumbnail(video_id: str) -> str:
+    clean_id = str(video_id or "").strip()
+    if re.fullmatch(r"[A-Za-z0-9_-]{6,20}", clean_id):
+        return f"https://i.ytimg.com/vi/{clean_id}/mqdefault.jpg"
+    return ""
 
 
 class Library:
@@ -19,6 +28,7 @@ class Library:
         migrate_legacy_storage()
         self._songs: list[dict] = []
         self._playlists: list[dict] = []
+        self._history: list[dict] = []
         self._load()
 
     def _load(self):
@@ -32,6 +42,7 @@ class Library:
             elif isinstance(data, dict):
                 self._songs = data.get("songs", [])
                 self._playlists = data.get("playlists", [])
+                self._history = data.get("history", [])
             else:
                 self._songs = []
                 self._playlists = []
@@ -39,11 +50,39 @@ class Library:
                 self._songs = []
             if not isinstance(self._playlists, list):
                 self._playlists = []
+            if not isinstance(self._history, list):
+                self._history = []
+            self._history = [
+                entry for entry in self._history
+                if isinstance(entry, dict)
+                and isinstance(entry.get("video_id"), str)
+                and entry["video_id"]
+                and isinstance(entry.get("played_at"), str)
+            ][-200:]
+            changed = False
+            for song in self._songs:
+                if isinstance(song, dict) and not song.get("thumbnail_url"):
+                    song["thumbnail_url"] = _youtube_thumbnail(
+                        song.get("video_id", "")
+                    )
+                    changed = changed or bool(song["thumbnail_url"])
+            for playlist in self._playlists:
+                if not isinstance(playlist, dict):
+                    continue
+                for track in playlist.get("tracks", []):
+                    if isinstance(track, dict) and not track.get("thumbnail_url"):
+                        track["thumbnail_url"] = _youtube_thumbnail(
+                            track.get("video_id", "")
+                        )
+                        changed = changed or bool(track["thumbnail_url"])
+            if changed:
+                self._save()
             self._prune_songs()
             self._prune_playlists()
         except (OSError, json.JSONDecodeError):
             self._songs = []
             self._playlists = []
+            self._history = []
 
     def _save(self):
         LIBRARY_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -56,6 +95,7 @@ class Library:
                     "version": 2,
                     "songs": self._songs,
                     "playlists": self._playlists,
+                    "history": self._history,
                 }, handle, indent=2, ensure_ascii=False)
             os.replace(temp_name, LIBRARY_FILE)
         finally:
@@ -81,7 +121,7 @@ class Library:
         )
 
     def add_song(self, video_id: str, title: str, channel: str,
-                 thumbnail_url: str, file_path: str):
+                 thumbnail_url: str, file_path: str, duration: int = 0):
         if not file_path or not os.path.isfile(file_path):
             return
         if self.find(video_id):
@@ -90,30 +130,73 @@ class Library:
             "video_id": video_id,
             "title": title,
             "channel": channel,
-            "thumbnail_url": thumbnail_url,
+            "thumbnail_url": thumbnail_url or _youtube_thumbnail(video_id),
             "file_path": file_path,
+            "duration": max(0, int(duration or 0)),
             "added_at": datetime.now(timezone.utc).isoformat(),
             "last_played": None,
+            "play_count": 0,
+            "favorite": False,
         })
         self._save()
 
     def mark_played(self, video_id: str):
         song = self.find(video_id)
         if song:
-            song["last_played"] = datetime.now(timezone.utc).isoformat()
+            played_at = datetime.now(timezone.utc).isoformat()
+            song["last_played"] = played_at
+            song["play_count"] = int(song.get("play_count") or 0) + 1
+            self._history.append({"video_id": video_id, "played_at": played_at})
+            self._history = self._history[-200:]
             self._save()
+
+    def toggle_favorite(self, video_id: str) -> bool:
+        song = self.find(video_id)
+        if not song:
+            return False
+        song["favorite"] = not bool(song.get("favorite"))
+        self._save()
+        return bool(song["favorite"])
+
+    def favorites(self) -> list[dict]:
+        return [song for song in self.all_songs() if song.get("favorite")]
+
+    def recently_played(self, limit: int = 20) -> list[dict]:
+        songs = {song.get("video_id"): song for song in self.all_songs()}
+        seen = set()
+        result = []
+        for entry in reversed(self._history):
+            video_id = entry["video_id"]
+            if video_id in songs and video_id not in seen:
+                seen.add(video_id)
+                result.append(songs[video_id])
+            if len(result) >= limit:
+                break
+        if not result:
+            result = sorted(
+                (song for song in songs.values() if song.get("last_played")),
+                key=lambda song: song["last_played"], reverse=True,
+            )[:limit]
+        return result
+
+    def listening_history(self) -> list[dict]:
+        songs = {song.get("video_id"): song for song in self.all_songs()}
+        return [
+            {"song": songs[entry["video_id"]], "played_at": entry["played_at"]}
+            for entry in reversed(self._history)
+            if entry["video_id"] in songs
+        ]
 
     def remove_song(self, video_id: str):
         self._songs = [s for s in self._songs if s.get("video_id") != video_id]
-        remaining_playlists = []
+        self._history = [
+            entry for entry in self._history if entry.get("video_id") != video_id
+        ]
         for playlist in self._playlists:
             playlist["tracks"] = [
                 track for track in playlist.get("tracks", [])
                 if track.get("video_id") != video_id
             ]
-            if playlist["tracks"]:
-                remaining_playlists.append(playlist)
-        self._playlists = remaining_playlists
         self._save()
 
     def _prune_playlists(self):
@@ -128,17 +211,18 @@ class Library:
         changed = False
         playlists = []
         for playlist in self._playlists:
+            if not isinstance(playlist, dict) or not playlist.get("playlist_id"):
+                changed = True
+                continue
             tracks = [
                 track for track in playlist.get("tracks", [])
-                if track.get("video_id") in downloaded
+                if isinstance(track, dict)
+                and track.get("video_id") in downloaded
             ]
-            if tracks:
-                if len(tracks) != len(playlist.get("tracks", [])):
-                    changed = True
-                playlist["tracks"] = tracks
-                playlists.append(playlist)
-            else:
+            if len(tracks) != len(playlist.get("tracks", [])):
                 changed = True
+            playlist["tracks"] = tracks
+            playlists.append(playlist)
         if changed:
             self._playlists = playlists
             self._save()
@@ -181,7 +265,8 @@ class Library:
                 "video_id": video_id,
                 "title": value.get("title", "Unknown title"),
                 "channel": value.get("channel", channel),
-                "thumbnail_url": value.get("thumbnail_url", ""),
+                "thumbnail_url": value.get("thumbnail_url", "")
+                or _youtube_thumbnail(video_id),
                 "duration": value.get("duration", 0),
             })
 
@@ -214,3 +299,146 @@ class Library:
             if playlist.get("playlist_id") != playlist_id
         ]
         self._save()
+
+    def create_playlist(self, title: str) -> dict:
+        """Create a durable local playlist, including when it has no tracks."""
+        clean_title = " ".join(str(title or "").split())
+        if not clean_title:
+            raise ValueError("Playlist name cannot be empty")
+        now = datetime.now(timezone.utc).isoformat()
+        playlist = {
+            "playlist_id": f"local-{uuid.uuid4().hex}",
+            "title": clean_title,
+            "channel": "Local playlist",
+            "thumbnail_url": "",
+            "url": "",
+            "tracks": [],
+            "manual": True,
+            "added_at": now,
+            "updated_at": now,
+        }
+        self._playlists.append(playlist)
+        self._save()
+        return playlist
+
+    def rename_playlist(self, playlist_id: str, title: str) -> bool:
+        clean_title = " ".join(str(title or "").split())
+        playlist = self.find_playlist(playlist_id)
+        if not playlist or not clean_title:
+            return False
+        playlist["title"] = clean_title
+        playlist["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self._save()
+        return True
+
+    def rename_song(self, video_id: str, title: str) -> bool:
+        """Rename library metadata and every playlist reference to the song."""
+        clean_title = " ".join(str(title or "").split())
+        song = self.find(video_id)
+        if not song or not clean_title:
+            return False
+        song["title"] = clean_title
+        for playlist in self._playlists:
+            for track in playlist.get("tracks", []):
+                if track.get("video_id") == video_id:
+                    track["title"] = clean_title
+                    playlist["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self._save()
+        return True
+
+    @staticmethod
+    def _track_from_song(song: dict, source: dict | None = None) -> dict:
+        source = source or {}
+        return {
+            "video_id": song.get("video_id", ""),
+            "title": song.get("title", "Unknown title"),
+            "channel": song.get("channel", ""),
+            "thumbnail_url": song.get("thumbnail_url", ""),
+            "duration": source.get("duration", song.get("duration", 0)),
+        }
+
+    def add_song_to_playlist(self, playlist_id: str, video_id: str) -> bool:
+        playlist = self.find_playlist(playlist_id)
+        song = self.find(video_id)
+        if not playlist or not song:
+            return False
+        tracks = playlist.setdefault("tracks", [])
+        if any(track.get("video_id") == video_id for track in tracks):
+            return False
+        tracks.append(self._track_from_song(song))
+        playlist["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self._save()
+        return True
+
+    def remove_song_from_playlist(self, playlist_id: str, video_id: str) -> bool:
+        playlist = self.find_playlist(playlist_id)
+        if not playlist:
+            return False
+        tracks = playlist.get("tracks", [])
+        remaining = [
+            track for track in tracks if track.get("video_id") != video_id
+        ]
+        if len(remaining) == len(tracks):
+            return False
+        playlist["tracks"] = remaining
+        playlist["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self._save()
+        return True
+
+    def move_song_to_playlist(
+        self, source_playlist_id: str, target_playlist_id: str, video_id: str
+    ) -> bool:
+        if source_playlist_id == target_playlist_id:
+            return False
+        source = self.find_playlist(source_playlist_id)
+        target = self.find_playlist(target_playlist_id)
+        song = self.find(video_id)
+        if not source or not target or not song:
+            return False
+        source_track = next(
+            (
+                track for track in source.get("tracks", [])
+                if track.get("video_id") == video_id
+            ),
+            None,
+        )
+        if source_track is None:
+            return False
+        if not any(
+            track.get("video_id") == video_id
+            for track in target.get("tracks", [])
+        ):
+            target.setdefault("tracks", []).append(
+                self._track_from_song(song, source_track)
+            )
+        source["tracks"] = [
+            track for track in source.get("tracks", [])
+            if track.get("video_id") != video_id
+        ]
+        now = datetime.now(timezone.utc).isoformat()
+        source["updated_at"] = now
+        target["updated_at"] = now
+        self._save()
+        return True
+
+    def move_playlist_track(
+        self, playlist_id: str, video_id: str, offset: int
+    ) -> bool:
+        playlist = self.find_playlist(playlist_id)
+        if not playlist or offset not in (-1, 1):
+            return False
+        tracks = playlist.get("tracks", [])
+        index = next(
+            (
+                position for position, track in enumerate(tracks)
+                if track.get("video_id") == video_id
+            ),
+            -1,
+        )
+        target = index + offset
+        if index < 0 or target < 0 or target >= len(tracks):
+            return False
+        tracks[index], tracks[target] = tracks[target], tracks[index]
+        playlist["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self._save()
+        return True

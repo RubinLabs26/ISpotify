@@ -36,6 +36,43 @@ COLORS = {
     "success": "#a7c9a8",
     "warning": "#d3bd8a",
     "info": "#9fb2c9",
+    # Depth: a single soft shadow colour used by QGraphicsDropShadowEffect on
+    # the layered surfaces (player bar, cards). Qt cannot blur arbitrary
+    # widgets, so deliberate shadows plus the surface ramp above stand in for
+    # the "glassy layered" look on both Windows and Linux.
+    "shadow": "rgba(0, 0, 0, 0.45)",
+}
+
+
+# ---------------------------------------------------------------------------
+# Design tokens
+#
+# A small, deliberate vocabulary so radius/spacing/motion stay consistent
+# instead of drifting per-widget. These formalise values already implied by
+# the layout; they are plain data (ints / strings) and carry no behaviour.
+# ---------------------------------------------------------------------------
+
+# Spacing scale (4px base grid).
+SPACE = {1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 7: 32, 8: 40}
+
+# Corner-radius scale. `pill` is intentionally large so square controls read
+# as fully round at any of the sizes used in the app.
+RADIUS = {"sm": 8, "md": 12, "lg": 16, "pill": 999}
+
+# Motion: durations in milliseconds and the easing curves paired with them.
+# Deliberately eased (never bouncy) to match the target aesthetic.
+MOTION = {
+    "fast": 120,   # control hover / press feedback
+    "base": 180,   # page transitions (matches the existing page fade)
+    "slow": 260,   # panel reveals / dismissals
+}
+
+from PySide6.QtCore import QEasingCurve  # noqa: E402  (kept beside its use)
+
+EASING = {
+    "standard": QEasingCurve.OutCubic,   # smooth, no overshoot
+    "emphasis": QEasingCurve.OutQuint,   # page fade (already in use)
+    "exit": QEasingCurve.InOutCubic,     # dismissals
 }
 
 
@@ -166,7 +203,7 @@ def install_theme(app) -> None:
         QFrame#card {{
             background: {COLORS["surface"]};
             border: 1px solid {COLORS["border"]};
-            border-radius: 14px;
+            border-radius: 12px;
         }}
         QFrame#card:hover {{
             border-color: {COLORS["border_bright"]};
@@ -176,11 +213,11 @@ def install_theme(app) -> None:
             background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                 stop:0 {COLORS["surface_raised"]}, stop:1 {COLORS["surface"]});
             border: 1px solid {COLORS["border"]};
-            border-radius: 18px;
+            border-radius: 16px;
         }}
         QWidget#player {{
-            background: {COLORS["surface"]};
-            border-top: 1px solid {COLORS["border"]};
+            background: {COLORS["surface_raised"]};
+            border-top: 1px solid {COLORS["border_bright"]};
             border-radius: 0;
         }}
         QScrollArea#settingsScroll,
@@ -191,12 +228,12 @@ def install_theme(app) -> None:
         QFrame#downloadIntro {{
             background: {COLORS["surface"]};
             border: 1px solid {COLORS["border"]};
-            border-radius: 14px;
+            border-radius: 12px;
         }}
         QFrame#downloadCard {{
             background: {COLORS["surface_raised"]};
             border: 1px solid {COLORS["border_bright"]};
-            border-radius: 14px;
+            border-radius: 12px;
         }}
         QFrame#downloadQueue {{
             background: {COLORS["surface"]};
@@ -400,14 +437,14 @@ def install_theme(app) -> None:
         }}
 
         QPushButton#playButton {{
-            min-width: 42px;
-            max-width: 42px;
-            min-height: 42px;
-            max-height: 42px;
+            min-width: 44px;
+            max-width: 44px;
+            min-height: 44px;
+            max-height: 44px;
             padding: 0;
-            border-radius: 21px;
+            border-radius: 22px;
             background: {COLORS["accent"]};
-            border: 1px solid {COLORS["accent"]};
+            border: 2px solid {COLORS["accent"]};
         }}
         QPushButton#playButton:hover {{
             background: #ffffff;
@@ -415,7 +452,7 @@ def install_theme(app) -> None:
         }}
         QPushButton#playButton:focus {{
             background: #ffffff;
-            border-color: #ffffff;
+            border-color: {COLORS["accent_soft"]};
         }}
         QPushButton#playButton:pressed {{
             background: {COLORS["accent_press"]};
@@ -448,6 +485,7 @@ def install_theme(app) -> None:
             text-align: left;
             background: transparent;
             border: 1px solid transparent;
+            border-left: 2px solid transparent;
             color: {COLORS["text_secondary"]};
             padding: 9px 12px;
             border-radius: 10px;
@@ -459,10 +497,21 @@ def install_theme(app) -> None:
             color: {COLORS["text"]};
         }}
         QPushButton#navButton:checked {{
-            background: {COLORS["surface_raised"]};
-            border-color: {COLORS["border"]};
+            /* The raised pill and accent rail are drawn by the sliding
+               QFrame#navIndicator beneath, so selection glides between
+               items instead of blinking. */
+            background: transparent;
             color: {COLORS["text"]};
             font-weight: 600;
+        }}
+        QPushButton#navButton:checked:hover {{
+            background: transparent;
+        }}
+        QFrame#navIndicator {{
+            background: {COLORS["surface_raised"]};
+            border: 1px solid {COLORS["border"]};
+            border-left: 2px solid {COLORS["accent"]};
+            border-radius: 10px;
         }}
 
         QPushButton#modeButton {{
@@ -519,6 +568,26 @@ def install_theme(app) -> None:
         QLineEdit:focus {{
             border-color: {COLORS["border_bright"]};
             background: {COLORS["surface_raised"]};
+        }}
+        QComboBox, QListWidget#upNextList {{
+            background: {COLORS["surface"]};
+            border: 1px solid {COLORS["border"]};
+            border-radius: 10px;
+            padding: 8px;
+            color: {COLORS["text"]};
+        }}
+        QComboBox QAbstractItemView {{
+            background: {COLORS["surface_raised"]};
+            color: {COLORS["text"]};
+            selection-background-color: {COLORS["surface_active"]};
+        }}
+        QListWidget#upNextList::item {{
+            border-bottom: 1px solid {COLORS["border"]};
+            padding: 12px 8px;
+        }}
+        QListWidget#upNextList::item:selected {{
+            background: {COLORS["surface_active"]};
+            color: {COLORS["text"]};
         }}
         QTextEdit#cookieBox {{
             background: {COLORS["surface"]};

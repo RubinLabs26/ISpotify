@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(19, 0, 0, 0),
-    prodvers=(19, 0, 0, 0),
+    filevers=(19, 4, 0, 0),
+    prodvers=(19, 4, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -14,11 +14,11 @@ VSVersionInfo(
       StringTable('040904B0', [
         StringStruct('CompanyName', 'iSpotify'),
         StringStruct('FileDescription', 'iSpotify desktop music player'),
-        StringStruct('FileVersion', '19.0.0'),
+        StringStruct('FileVersion', '19.4.0'),
         StringStruct('InternalName', 'ISpotify'),
         StringStruct('OriginalFilename', 'ISpotify-windows-x86_64.exe'),
         StringStruct('ProductName', 'iSpotify'),
-        StringStruct('ProductVersion', '19.0.0'),
+        StringStruct('ProductVersion', '19.4.0'),
       ])
     ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])]),

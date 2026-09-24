@@ -25,7 +25,7 @@ class SearchResult:
         self.video_id = video_id
         self.title = title
         self.channel = channel
-        self.thumbnail_url = thumbnail_url
+        self.thumbnail_url = thumbnail_url or youtube_thumbnail_url(video_id)
         self.duration = duration
         self.playlist_id = None
 
@@ -57,6 +57,14 @@ def _text_value(value, fallback="") -> str:
             return value["simpleText"]
         return "".join(run.get("text", "") for run in value.get("runs") or [])
     return value or fallback
+
+
+def youtube_thumbnail_url(video_id: str) -> str:
+    """Return YouTube's stable medium-size thumbnail for a video ID."""
+    clean_id = str(video_id or "").strip()
+    if not clean_id or not re.fullmatch(r"[A-Za-z0-9_-]{6,20}", clean_id):
+        return ""
+    return f"https://i.ytimg.com/vi/{clean_id}/mqdefault.jpg"
 
 
 class SearchWorker(QObject):
@@ -108,7 +116,7 @@ class SearchWorker(QObject):
                     title=entry.get("title", "Unknown title"),
                     channel=entry.get("channel") or entry.get("uploader")
                     or "Unknown channel",
-                    thumbnail_url="",
+                    thumbnail_url=entry.get("thumbnail") or "",
                     duration=entry.get("duration") or 0,
                 ))
         return [result for result in results if result.video_id]
@@ -175,7 +183,16 @@ class SearchWorker(QObject):
                     or entry.get("ownerText"),
                     "Unknown channel",
                 ),
-                thumbnail_url="",
+                thumbnail_url=next(
+                    (
+                        image.get("url", "")
+                        for image in reversed(
+                            (entry.get("thumbnail") or {}).get("thumbnails", [])
+                        )
+                        if image.get("url")
+                    ),
+                    "",
+                ),
                 duration=_text_value(entry.get("lengthText"), "0"),
             ))
             if len(results) >= max_results:
@@ -317,7 +334,7 @@ class PlaylistSearchWorker(QObject):
                 playlist_id=playlist_id,
                 title=title,
                 channel=owner,
-                thumbnail_url="",
+                thumbnail_url=self._thumbnail(model),
                 url=f"https://www.youtube.com/playlist?list={playlist_id}",
                 track_count=int(digits) if digits else 0,
             ))
@@ -358,6 +375,25 @@ class PlaylistSearchWorker(QObject):
         lockup = metadata.get("lockupMetadataViewModel") or {}
         title = lockup.get("title") or {}
         return title.get("content") or "Untitled playlist"
+
+    @staticmethod
+    def _thumbnail(model: dict) -> str:
+        """Find the largest thumbnail URL in either YouTube result shape."""
+        urls = []
+
+        def walk(value):
+            if isinstance(value, dict):
+                url = value.get("url")
+                if isinstance(url, str) and url.startswith("http"):
+                    urls.append(url)
+                for child in value.values():
+                    walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    walk(child)
+
+        walk(model.get("thumbnail") or model.get("contentImage") or model)
+        return urls[-1] if urls else ""
 
     @staticmethod
     def _view_model_texts(model: dict) -> list[str]:
@@ -520,7 +556,7 @@ class PlaylistLoadWorker(QObject):
                 title=entry.get("title", "Unknown title"),
                 channel=entry.get("channel") or entry.get("uploader")
                 or self.playlist.channel,
-                thumbnail_url="",
+                thumbnail_url=entry.get("thumbnail") or "",
                 duration=entry.get("duration") or 0,
                 playlist_id=self.playlist.playlist_id,
             ))

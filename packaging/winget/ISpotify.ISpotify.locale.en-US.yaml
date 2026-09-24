@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 
 PackageIdentifier: ISpotify.ISpotify
-PackageVersion: 19.0.0
+PackageVersion: 19.4.0
 PackageLocale: en-US
 Publisher: ISpotify
 PublisherUrl: https://github.com/RubinLabs26
@@ -19,9 +19,9 @@ Tags:
   - music
   - player
 ReleaseNotes: |-
-  Adds browser-based Discord account login through the official Social SDK.
-  Shows the current track as a Discord listening activity.
-  Fixes a native crash in Discord authorization and improves download and device handling.
-ReleaseNotesUrl: https://github.com/RubinLabs26/ISpotify/releases/tag/v19.0.0
+  Adds hidden disco, vinyl, zen, library vault, and volume easter eggs.
+  Adds smoother navigation, page, icon-button, scrolling, and download-progress motion.
+  Fixes audio-label text, missing SVG record grooves, and hero headline alignment.
+ReleaseNotesUrl: https://github.com/RubinLabs26/ISpotify/releases/tag/v19.4.0
 ManifestType: defaultLocale
 ManifestVersion: 1.12.0

@@ -1,0 +1,106 @@
+name: Stable release finalizer
+
+on:
+  workflow_run:
+    workflows: [Build Windows client, Build Linux client]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: stable-release-finalizer-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: startsWith(github.event.workflow_run.head_branch, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify both platform builds
+        id: builds
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN || github.token }}
+          TAG: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          runs="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$HEAD_SHA&per_page=100")"
+          for workflow in "Build Windows client" "Build Linux client"; do
+            conclusion="$(jq -r --arg workflow "$workflow" --arg tag "$TAG" \
+              '[.workflow_runs[] | select(.name == $workflow and .head_branch == $tag)] | sort_by(.created_at) | last | .conclusion // "missing"' \
+              <<<"$runs")"
+            if [[ "$conclusion" != success ]]; then
+              echo "$workflow is $conclusion; stable release remains a draft."
+              echo "ready=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        if: steps.builds.outputs.ready == 'true'
+        with:
+          ref: main
+          token: ${{ secrets.RELEASE_BOT_TOKEN }}
+          fetch-depth: 0
+      - name: Verify assets and publish stable release
+        if: steps.builds.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          TAG: ${{ github.event.workflow_run.head_branch }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          for required in \
+            ISpotify-Setup-x86_64.exe ISpotify-windows-x86_64.exe \
+            ISpotify-linux-x86_64 "ispotify_${TAG#v}_amd64.deb"; do
+            grep -Fx "$required" <<<"$assets" >/dev/null || {
+              echo "Required release asset is missing: $required" >&2
+              exit 1
+            }
+          done
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+      - name: Synchronize package metadata
+        if: steps.builds.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          TAG: ${{ github.event.workflow_run.head_branch }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          version="${TAG#v}"
+          linux_sha="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[] | select(.name == "ISpotify-linux-x86_64") | .digest' | cut -d: -f2)"
+          installer_sha="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[] | select(.name == "ISpotify-Setup-x86_64.exe") | .digest' | cut -d: -f2)"
+          curl --fail --location --retry 3 \
+            "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/$TAG.tar.gz" \
+            --output "$RUNNER_TEMP/source.tar.gz"
+          source_sha="$(sha256sum "$RUNNER_TEMP/source.tar.gz" | cut -d' ' -f1)"
+          python tools/release_bot.py sync --version "$version" \
+            --linux-sha "$linux_sha" --installer-sha "$installer_sha" \
+            --source-sha "$source_sha"
+          if git diff --quiet; then
+            echo "Package metadata is already synchronized."
+            exit 0
+          fi
+          branch="bot/metadata-v$version"
+          git config user.name "iSpotify Release Bot"
+          git config user.email "releases@ispotify.invalid"
+          git switch -c "$branch"
+          git add packaging
+          git commit -m "Pin v$version package metadata"
+          git push --force-with-lease origin "$branch"
+          pr_url="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json url --jq '.[0].url')"
+          if [[ -z "$pr_url" ]]; then
+            pr_url="$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+              --title "Pin v$version package metadata" \
+              --body "Automated checksum and WinGet metadata synchronization for the published v$version artifacts." \
+              --label automated --label automerge --label bot:metadata --label release:skip)"
+          fi
+          gh pr edit "$pr_url" --repo "$GITHUB_REPOSITORY" \
+            --add-label automated --add-label automerge --add-label bot:metadata --add-label release:skip

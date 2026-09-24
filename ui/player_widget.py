@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui.widgets import (
-    ArtworkLabel, artwork_pixmap, format_duration, icon_button,
+    ArtworkLabel, MotionButton, format_duration, icon_button, soft_shadow,
     standard_icon,
 )
 from core.audio_devices import (
@@ -41,9 +41,17 @@ class PlayerWidget(QWidget):
         self.player.setAudioOutput(self.audio_output)
         self.audio_output.setVolume(0.7)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(12)
+        # A soft upward shadow lifts the transport bar above the page content,
+        # standing in for the layered/glassy depth Qt cannot blur directly.
+        self._shadow = soft_shadow(self, blur=32, y=-6, alpha=90)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        layout = QHBoxLayout()
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(14)
+        root.addLayout(layout)
         self.artwork = ArtworkLabel("iSpotify", QSize(46, 46))
         layout.addWidget(self.artwork)
         info = QVBoxLayout()
@@ -52,7 +60,7 @@ class PlayerWidget(QWidget):
         self.title_label.setObjectName("playerTitle")
         self.artist_label = QLabel("Pick something to play")
         self.artist_label.setObjectName("secondary")
-        self.output_label = QLabel("Detecting audio outputâ€¦")
+        self.output_label = QLabel("Detecting audio output…")
         self.output_label.setObjectName("outputDevice")
         info.addStretch()
         info.addWidget(self.title_label)
@@ -136,7 +144,7 @@ class PlayerWidget(QWidget):
         self._audio_device_id = device_id
         self._audio_device_kind = kind
         if name:
-            label = f"{output_kind_label(kind)} Â· {name}"
+            label = f"{output_kind_label(kind)} · {name}"
             self._elide(self.output_label, label, 168)
             self.output_label.setToolTip(f"Current audio output: {name}")
         else:
@@ -163,8 +171,8 @@ class PlayerWidget(QWidget):
         load_token = self._load_token
         self._elide(self.title_label, song.get("title", "Unknown title"), 168)
         self._elide(self.artist_label, song.get("channel", "Unknown artist"), 168)
-        self.artwork.set_artwork(artwork_pixmap(song.get("title", "iSpotify"),
-                                                self.artwork.artwork_size))
+        self.artwork.title = song.get("title", "iSpotify")
+        self.artwork.set_thumbnail(song.get("thumbnail_url", ""))
         # Explicitly release the previous FFmpeg decoder before replacing it.
         # Without this, rapidly switching between downloaded MP3s can leave
         # two decoders alive and crash some Qt FFmpeg builds on Linux.
@@ -173,6 +181,20 @@ class PlayerWidget(QWidget):
         self.play_btn.setIcon(standard_icon("SP_MediaPlay"))
         QTimer.singleShot(0, lambda: self._start_song(song, load_token))
         self.trackChanged.emit(song)
+
+    def refresh_song_metadata(self):
+        """Refresh labels after a library rename without restarting playback."""
+        if not self.current_song:
+            return
+        title = self.current_song.get("title", "Unknown title")
+        self._elide(self.title_label, title, 168)
+        self._elide(
+            self.artist_label,
+            self.current_song.get("channel", "Unknown artist"),
+            168,
+        )
+        self.artwork.title = title
+        self.artwork.set_thumbnail(self.current_song.get("thumbnail_url", ""))
 
     def _start_song(self, song: dict, load_token: int):
         if load_token != self._load_token:
@@ -190,7 +212,17 @@ class PlayerWidget(QWidget):
         else:
             self.player.play()
 
+    def set_vinyl_mode(self, enabled: bool) -> None:
+        self.artwork.set_vinyl(enabled)
+        self.artwork.set_spinning(
+            self.player.playbackState() == QMediaPlayer.PlayingState
+        )
+
+    def vinyl_mode(self) -> bool:
+        return self.artwork.is_vinyl()
+
     def _on_state_changed(self, state):
+        self.artwork.set_spinning(state == QMediaPlayer.PlayingState)
         self.play_btn.setIcon(
             standard_icon("SP_MediaPause" if state == QMediaPlayer.PlayingState
                           else "SP_MediaPlay")
