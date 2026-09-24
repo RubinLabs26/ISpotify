@@ -18,7 +18,7 @@ depends=(
   'deno'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('e891177d5306c2a5f1f020a03c183f56b84ba039fe05a1a0670222402d6e1439')
 
 check() {
   cd "ISpotify-$pkgver"
