@@ -122,13 +122,28 @@ def set_release_version(version: str) -> None:
 
 def release_notes(version: str, title: str, number: int, url: str, body: str) -> str:
     useful: list[str] = []
+    in_changes = False
     for raw_line in body.splitlines():
         line = raw_line.strip()
         lowered = line.lower()
-        if lowered.startswith(("## validation", "## checklist")):
+        if lowered.startswith(("## changes", "### changes", "## what changed", "### what changed")):
+            in_changes = True
+            continue
+        if lowered.startswith(("## validation", "## checklist", "## release automation")):
             break
-        if line.startswith("- ") and len(line) <= 240:
+        # Dependabot appends HTML details and command hints to its PR body.
+        # Those instructions are workflow noise, not release content.
+        if (
+            not line
+            or line.startswith(("<", "<!--", "---", "```") )
+            or "dependabot commands" in lowered
+            or lowered.startswith("@dependabot")
+        ):
+            continue
+        if line.startswith("- ") and len(line) <= 240 and "dependabot" not in lowered:
             useful.append(line)
+        elif in_changes and not line.startswith("#") and len(line) <= 240:
+            useful.append(f"- {line}")
         if len(useful) == 8:
             break
     details = "\n".join(useful) if useful else f"- {title}"
