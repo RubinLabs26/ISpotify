@@ -149,6 +149,7 @@ choose_installation_method() {
           return 1
         fi
         return 0
+        ;;
       *)
         printf '%sThe signed repository is available for APT and pacman systems; %s was detected.%s\n' \
           "$red" "${manager:-no package manager}" "$reset" >&2
