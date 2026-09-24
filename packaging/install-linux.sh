@@ -119,13 +119,35 @@ ensure_aria2() {
   install_aria2 "$manager"
 }
 
+repository_bootstrap_available() {
+  local asset
+  for asset in ispotify-archive-keyring.gpg Release Packages.gz; do
+    if command -v curl >/dev/null 2>&1; then
+      curl --fail --location --silent --show-error --head \
+        "$REPOSITORY_URL/$asset" >/dev/null 2>&1 || return 1
+    elif command -v wget >/dev/null 2>&1; then
+      wget --quiet --spider "$REPOSITORY_URL/$asset" || return 1
+    else
+      return 1
+    fi
+  done
+}
+
 choose_installation_method() {
   local manager reply=""
   manager="$(detect_package_manager || true)"
 
   if [[ "$installation_method" == "repo" ]]; then
     case "$manager" in
-      apt-get|pacman) printf 'repo'; return 0 ;;
+      apt-get|pacman)
+        if repository_bootstrap_available; then
+          printf 'repo'
+        else
+          printf '%sThe signed package repository is not published yet; use standalone mode or try again after it is available.%s\n' \
+            "$red" "$reset" >&2
+          return 1
+        fi
+        return 0
       *)
         printf '%sThe signed repository is available for APT and pacman systems; %s was detected.%s\n' \
           "$red" "${manager:-no package manager}" "$reset" >&2
@@ -137,6 +159,11 @@ choose_installation_method() {
 
   case "$manager" in
     apt-get|pacman)
+      if ! repository_bootstrap_available; then
+        info "Install method" "signed repository unavailable; using standalone mode" >&2
+        printf 'standalone'
+        return 0
+      fi
       if (( assume_yes )); then
         printf 'repo'
       elif [[ -r /dev/tty && -w /dev/tty ]]; then
