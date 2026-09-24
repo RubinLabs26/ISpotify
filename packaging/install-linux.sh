@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 REPOSITORY="RubinLabs26/ISpotify"
 REPOSITORY_URL="https://github.com/$REPOSITORY/releases/latest/download"
+SOURCE_URL="https://raw.githubusercontent.com/$REPOSITORY/main/packaging/apt"
 PACKAGE_KEY_FINGERPRINT="FBF50CE755A06C567BFAE4D81C9D795EC0272267"
 APP_NAME="iSpotify"
 ASSET_NAME="ISpotify-linux-x86_64"
@@ -121,7 +122,7 @@ ensure_aria2() {
 
 repository_bootstrap_available() {
   local asset
-  for asset in ispotify-archive-keyring.gpg Release Packages.gz; do
+  for asset in Release Packages.gz; do
     if command -v curl >/dev/null 2>&1; then
       curl --fail --location --silent --show-error --head \
         "$REPOSITORY_URL/$asset" >/dev/null 2>&1 || return 1
@@ -200,7 +201,7 @@ install_from_repository() {
   case "$manager" in
     apt-get)
       step "Downloading the Rubin Labs package signing key"
-      download "$REPOSITORY_URL/ispotify-archive-keyring.gpg" "$setup_dir/ispotify-archive-keyring.gpg"
+      download_repository_key gpg "$setup_dir/ispotify-archive-keyring.gpg"
       run_as_root install -Dm644 "$setup_dir/ispotify-archive-keyring.gpg" \
         /usr/share/keyrings/ispotify-archive-keyring.gpg
       apt_source="$setup_dir/ispotify.list"
@@ -214,7 +215,7 @@ install_from_repository() {
       ;;
     pacman)
       step "Downloading the Rubin Labs package signing key"
-      download "$REPOSITORY_URL/ispotify-archive-keyring.asc" "$setup_dir/ispotify-archive-keyring.asc"
+      download_repository_key asc "$setup_dir/ispotify-archive-keyring.asc"
       run_as_root pacman-key --init
       run_as_root pacman-key --add "$setup_dir/ispotify-archive-keyring.asc"
       run_as_root pacman-key --lsign-key "$PACKAGE_KEY_FINGERPRINT"
@@ -234,6 +235,16 @@ install_from_repository() {
   trap - EXIT
   printf '\n%s%s✓ iSpotify is installed and will update through %s.%s\n' \
     "$bold" "$green" "$manager" "$reset"
+}
+
+download_repository_key() {
+  local format="$1" destination="$2"
+  if download "$REPOSITORY_URL/ispotify-archive-keyring.$format" "$destination"; then
+    return 0
+  fi
+  printf '%sRelease key asset is unavailable; using the signed public key from source.%s\n' \
+    "$yellow" "$reset" >&2
+  download "$SOURCE_URL/ispotify-archive-keyring.$format" "$destination"
 }
 
 download() {
