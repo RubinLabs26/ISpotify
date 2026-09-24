@@ -497,11 +497,21 @@ def install_theme(app) -> None:
             color: {COLORS["text"]};
         }}
         QPushButton#navButton:checked {{
-            background: {COLORS["surface_raised"]};
-            border-color: {COLORS["border"]};
-            border-left: 2px solid {COLORS["accent"]};
+            /* The raised pill and accent rail are drawn by the sliding
+               QFrame#navIndicator beneath, so selection glides between
+               items instead of blinking. */
+            background: transparent;
             color: {COLORS["text"]};
             font-weight: 600;
+        }}
+        QPushButton#navButton:checked:hover {{
+            background: transparent;
+        }}
+        QFrame#navIndicator {{
+            background: {COLORS["surface_raised"]};
+            border: 1px solid {COLORS["border"]};
+            border-left: 2px solid {COLORS["accent"]};
+            border-radius: 10px;
         }}
 
         QPushButton#modeButton {{

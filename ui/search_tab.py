@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 from core.searcher import PlaylistResult, Searcher
 from ui.widgets import (
     ArtworkLabel, EmptyState, MotionButton, PlaylistArtworkLabel,
-    format_duration, icon_button, standard_icon,
+    enable_smooth_scroll, format_duration, icon_button, standard_icon,
 )
 
 
@@ -216,6 +216,7 @@ class SearchTab(QWidget):
         ))
         self.results_layout.addStretch()
         self.scroll.setWidget(self.results_host)
+        enable_smooth_scroll(self.scroll)
         root.addWidget(self.scroll, 1)
         self._set_mode("songs")
 

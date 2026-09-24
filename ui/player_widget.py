@@ -60,7 +60,7 @@ class PlayerWidget(QWidget):
         self.title_label.setObjectName("playerTitle")
         self.artist_label = QLabel("Pick something to play")
         self.artist_label.setObjectName("secondary")
-        self.output_label = QLabel("Detecting audio outputâ€¦")
+        self.output_label = QLabel("Detecting audio output…")
         self.output_label.setObjectName("outputDevice")
         info.addStretch()
         info.addWidget(self.title_label)
@@ -144,7 +144,7 @@ class PlayerWidget(QWidget):
         self._audio_device_id = device_id
         self._audio_device_kind = kind
         if name:
-            label = f"{output_kind_label(kind)} Â· {name}"
+            label = f"{output_kind_label(kind)} · {name}"
             self._elide(self.output_label, label, 168)
             self.output_label.setToolTip(f"Current audio output: {name}")
         else:
@@ -212,7 +212,17 @@ class PlayerWidget(QWidget):
         else:
             self.player.play()
 
+    def set_vinyl_mode(self, enabled: bool) -> None:
+        self.artwork.set_vinyl(enabled)
+        self.artwork.set_spinning(
+            self.player.playbackState() == QMediaPlayer.PlayingState
+        )
+
+    def vinyl_mode(self) -> bool:
+        return self.artwork.is_vinyl()
+
     def _on_state_changed(self, state):
+        self.artwork.set_spinning(state == QMediaPlayer.PlayingState)
         self.play_btn.setIcon(
             standard_icon("SP_MediaPause" if state == QMediaPlayer.PlayingState
                           else "SP_MediaPlay")

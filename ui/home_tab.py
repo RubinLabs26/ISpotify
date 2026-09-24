@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
 
-from ui.widgets import ArtworkLabel, MotionButton, icon_button
+from ui.widgets import ArtworkLabel, MotionButton, enable_smooth_scroll, icon_button
 
 
 class HomeTab(QWidget):
@@ -32,6 +32,7 @@ class HomeTab(QWidget):
         self.root.setContentsMargins(0, 0, 0, 24)
         self.root.setSpacing(22)
         scroll.setWidget(host)
+        enable_smooth_scroll(scroll)
         outer.addWidget(scroll)
         self._build()
 
@@ -46,6 +47,9 @@ class HomeTab(QWidget):
         title = QLabel("Music, without the noise.")
         title.setObjectName("pageTitle")
         title.setStyleSheet("font-size: 22pt; letter-spacing: -0.3px; margin-top: 2px;")
+        # A box-model stylesheet turns on QLabel's automatic indent, which
+        # pushed the headline out of line with the eyebrow and subtitle.
+        title.setIndent(0)
         title.setWordWrap(True)
         detail = QLabel("Search, save, and listen — kept local.")
         detail.setObjectName("pageSubtitle")

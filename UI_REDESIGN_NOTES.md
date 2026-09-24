@@ -53,3 +53,32 @@ or rewired. All existing behavior is unchanged and cross-platform
   search mode toggle, library filter/sort, download row states, token/icon
   resolution, effect-collision): **26/26 OK**.
 - End-to-end boot via the real `main.py` theme path: OK.
+
+---
+
+# Motion & polish pass
+
+A second, behaviour-preserving pass focused on smoothness. All motion
+animates sizes, positions or values. No new per-button graphics effects, so
+the Wayland click and repaint safety described above still holds.
+
+- **Sliding navigation highlight.** The sidebar selection is a single
+  `SlidingIndicator` that glides between items (`ui/widgets.py`). It re-snaps
+  whenever the sidebar is shown or resized.
+- **Page transitions.** Incoming pages fade in (0.35 → 1) and rise 14px into
+  place over `MOTION["slow"]`. Rapid switching always settles at rest.
+- **Tactile icon buttons.** Every `icon_button` glyph grows about 12% on hover,
+  squishes on press and springs back (`OutBack`). Only `iconSize` is
+  animated, and the frames are fixed-size in QSS, so layout never shifts.
+- **Smooth wheel scrolling.** Mouse-wheel steps glide on every page's scroll
+  area. Touchpad and high-resolution pixel scrolling pass through untouched.
+- **Download progress** glides forward between reports and jumps
+  straight back on a retry.
+- **Fixes:**
+  - Mojibake in the player: `Headphones Â· …` and `Detecting audio outputâ€¦`.
+  - Hero and download SVGs used `rgba()` strokes, which Qt's SVG renderer
+    ignores, so the record grooves were invisible. They now use
+    `stroke-opacity`.
+  - The hero headline was indented by QLabel's automatic indent.
+
+Hidden extras are documented separately in `docs/EASTER_EGGS.md`.
