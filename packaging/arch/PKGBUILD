@@ -1,5 +1,5 @@
 pkgname=ispotify
-pkgver=19.4.2
+pkgver=19.4.3
 pkgrel=1
 pkgdesc='Desktop music search, playback, and download application'
 arch=('x86_64')
