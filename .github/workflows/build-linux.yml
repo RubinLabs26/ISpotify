@@ -101,12 +101,17 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') && env.APT_REPOSITORY_PRIVATE_KEY != ''
         run: |
           gnupg_home="$RUNNER_TEMP/ispotify-gnupg"
+          repository_dir="$RUNNER_TEMP/ispotify-apt-repository"
           install -d -m 700 "$gnupg_home"
           printf '%s' "$APT_REPOSITORY_PRIVATE_KEY" | gpg --batch --homedir "$gnupg_home" --import
           packaging/apt/build-repository.sh \
-            dist/release \
+            "$repository_dir" \
             "dist/release/ispotify_${{ steps.version.outputs.version }}_amd64.deb" \
             "$gnupg_home"
+          cp "$repository_dir"/Packages "$repository_dir"/Packages.gz \
+            "$repository_dir"/Release "$repository_dir"/Release.gpg \
+            "$repository_dir"/InRelease "$repository_dir"/ispotify-archive-keyring.gpg \
+            "$repository_dir"/ispotify-archive-keyring.asc dist/release/
           rm -rf -- "$gnupg_home"
       - name: Upload Linux packages
         uses: actions/upload-artifact@v7
