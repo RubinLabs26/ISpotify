@@ -12,3 +12,9 @@ List the checks you ran and the platforms you tested.
 - [ ] Network and file operations do not block the UI thread.
 - [ ] Documentation and packaging metadata are updated when needed.
 - [ ] `python -m compileall -q main.py core ui` succeeds.
+
+## Release automation
+
+The repository bot assigns one `release:*` label. Maintainers can change it
+before merge: `release:major`, `release:minor`, `release:patch`, or
+`release:skip`. Protected checks must pass before auto-merge or release.
