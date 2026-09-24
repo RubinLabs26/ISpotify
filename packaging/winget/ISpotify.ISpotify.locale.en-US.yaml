@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 
 PackageIdentifier: ISpotify.ISpotify
-PackageVersion: 19.4.0
+PackageVersion: 19.4.1
 PackageLocale: en-US
 Publisher: ISpotify
 PublisherUrl: https://github.com/RubinLabs26
@@ -19,9 +19,9 @@ Tags:
   - music
   - player
 ReleaseNotes: |-
-  Adds hidden disco, vinyl, zen, library vault, and volume easter eggs.
-  Adds smoother navigation, page, icon-button, scrolling, and download-progress motion.
-  Fixes audio-label text, missing SVG record grooves, and hero headline alignment.
-ReleaseNotesUrl: https://github.com/RubinLabs26/ISpotify/releases/tag/v19.4.0
+  `@dependabot rebase` will rebase this PR
+  `@dependabot recreate` will recreate this PR, overwriting any edits that have been made to it
+  `@dependabot show <dependency name> ignore conditions` will show all of the ignore conditions of the specified dependency
+ReleaseNotesUrl: https://github.com/RubinLabs26/ISpotify/releases/tag/v19.4.1
 ManifestType: defaultLocale
 ManifestVersion: 1.12.0
