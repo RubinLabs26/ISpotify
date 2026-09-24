@@ -1,5 +1,5 @@
 #define AppName "iSpotify"
-#define AppVersion "19.3.1"
+#define AppVersion "19.4.0"
 #define AppPublisher "ISpotify"
 #define AppExeName "ISpotify.exe"
 
