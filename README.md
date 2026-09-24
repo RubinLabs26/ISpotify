@@ -39,13 +39,13 @@
 
 ## Download
 
-The current stable release is **v19.3.1**. Checksums are published beside the standalone executables.
+The current stable release is **v19.4.0**. Checksums are published beside the standalone executables.
 
 | Platform | Package | Download |
 |---|---|---|
 | Windows 10/11 | Installer | [ISpotify-Setup-x86_64.exe](https://github.com/RubinLabs26/ISpotify/releases/latest/download/ISpotify-Setup-x86_64.exe) |
 | Windows 10/11 | Portable | [ISpotify-windows-x86_64.exe](https://github.com/RubinLabs26/ISpotify/releases/latest/download/ISpotify-windows-x86_64.exe) |
-| Debian / Ubuntu | DEB package | [ispotify_19.3.1_amd64.deb](https://github.com/RubinLabs26/ISpotify/releases/download/v19.3.1/ispotify_19.3.1_amd64.deb) |
+| Debian / Ubuntu | DEB package | [ispotify_19.4.0_amd64.deb](https://github.com/RubinLabs26/ISpotify/releases/download/v19.4.0/ispotify_19.4.0_amd64.deb) |
 | Linux x86-64 | Portable | [ISpotify-linux-x86_64](https://github.com/RubinLabs26/ISpotify/releases/latest/download/ISpotify-linux-x86_64) |
 | All packages | Release page | [Latest release](https://github.com/RubinLabs26/ISpotify/releases/latest) |
 
