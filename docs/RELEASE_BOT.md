@@ -45,3 +45,8 @@ workflow** and choose a patch, minor, or major bump.
 The `RELEASE_BOT_TOKEN` Actions secret contains a maintainer token so events
 created by the bot can trigger protected workflows. GitHub's normal
 `GITHUB_TOKEN` intentionally suppresses many recursive workflow events.
+
+The `APT_REPOSITORY_PRIVATE_KEY` Actions secret contains the armored private
+key used only by tagged Linux builds to sign the APT repository metadata.
+Tagged releases publish the matching `Release`, `Packages.gz`, and keyring
+assets; the installer checks these assets before selecting repository mode.

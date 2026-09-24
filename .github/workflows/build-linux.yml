@@ -43,6 +43,8 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      APT_REPOSITORY_PRIVATE_KEY: ${{ secrets.APT_REPOSITORY_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v7
       - name: Check out private Discord SDK runtime
@@ -95,6 +97,17 @@ jobs:
             dist/release
           cd dist/release
           sha256sum ISpotify-linux-x86_64 > ISpotify-linux-x86_64.sha256
+      - name: Build signed APT repository metadata
+        if: startsWith(github.ref, 'refs/tags/v') && env.APT_REPOSITORY_PRIVATE_KEY != ''
+        run: |
+          gnupg_home="$RUNNER_TEMP/ispotify-gnupg"
+          install -d -m 700 "$gnupg_home"
+          printf '%s' "$APT_REPOSITORY_PRIVATE_KEY" | gpg --batch --homedir "$gnupg_home" --import
+          packaging/apt/build-repository.sh \
+            dist/release \
+            "dist/release/ispotify_${{ steps.version.outputs.version }}_amd64.deb" \
+            "$gnupg_home"
+          rm -rf -- "$gnupg_home"
       - name: Upload Linux packages
         uses: actions/upload-artifact@v7
         with:
