@@ -119,6 +119,11 @@ jobs:
             labeled=true
           fi
           if [[ "$trusted" == true || "$labeled" == true ]]; then
+            merge_state="$(gh pr view --repo "$GITHUB_REPOSITORY" "$PR_URL" --json mergeStateStatus --jq .mergeStateStatus)"
+            if [[ "$merge_state" == "BEHIND" ]]; then
+              echo "Refreshing stale branch before enabling auto-merge."
+              gh pr update-branch --repo "$GITHUB_REPOSITORY" "$PR_URL"
+            fi
             gh pr merge --repo "$GITHUB_REPOSITORY" --auto --squash "$PR_URL"
           else
             echo "Waiting for a maintainer to add the automerge label."

@@ -21,6 +21,20 @@ class ReleaseBotTests(unittest.TestCase):
         self.assertNotIn("99 tests", notes)
         self.assertIn("ispotify_19.5.0_amd64.deb", notes)
 
+    def test_release_notes_ignore_dependabot_commands(self):
+        notes = release_notes(
+            "19.5.1",
+            "deps: update keyring",
+            4,
+            "https://github.com/example/repo/pull/4",
+            "## Changes\n"
+            "Updated keyring to the latest compatible version.\n\n"
+            "<details>\n<summary>Dependabot commands</summary>\n"
+            "@dependabot rebase\n</details>",
+        )
+        self.assertIn("Updated keyring", notes)
+        self.assertNotIn("dependabot rebase", notes.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

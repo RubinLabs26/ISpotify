@@ -17,6 +17,8 @@ Team pull requests are enrolled in GitHub auto-merge. Outside contributors
 require a maintainer to add `automerge`. Dependabot patch and minor updates use
 the `automerge` label from `.github/dependabot.yml`. Branch protection still
 requires the `python` check and resolved conversations before merging.
+When an eligible branch is stale, the bot requests GitHub's safe branch update
+before enabling auto-merge; it never force-pushes or bypasses protection.
 
 ## Stable releases
 
