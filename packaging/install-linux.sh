@@ -121,8 +121,13 @@ ensure_aria2() {
 }
 
 repository_bootstrap_available() {
-  local asset
-  for asset in Release Packages.gz; do
+  local manager="$1" asset
+  local assets=(Release Packages.gz)
+  if [[ "$manager" == "pacman" ]]; then
+    # Pacman requires a repository database; APT metadata is not sufficient.
+    assets=(ispotify.db ispotify.db.sig ispotify.files ispotify.files.sig)
+  fi
+  for asset in "${assets[@]}"; do
     if command -v curl >/dev/null 2>&1; then
       curl --fail --location --silent --show-error --head \
         "$REPOSITORY_URL/$asset" >/dev/null 2>&1 || return 1
@@ -141,7 +146,7 @@ choose_installation_method() {
   if [[ "$installation_method" == "repo" ]]; then
     case "$manager" in
       apt-get|pacman)
-        if repository_bootstrap_available; then
+        if repository_bootstrap_available "$manager"; then
           printf 'repo'
         else
           printf '%sThe signed package repository is not published yet; use standalone mode or try again after it is available.%s\n' \
@@ -161,7 +166,7 @@ choose_installation_method() {
 
   case "$manager" in
     apt-get|pacman)
-      if ! repository_bootstrap_available; then
+      if ! repository_bootstrap_available "$manager"; then
         info "Install method" "signed repository unavailable; using standalone mode" >&2
         printf 'standalone'
         return 0
