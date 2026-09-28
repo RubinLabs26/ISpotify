@@ -68,7 +68,7 @@ jobs:
           python -c "from core.discord_social_sdk import DiscordSocialClient; c=DiscordSocialClient(lambda *a: None, lambda *a: None, lambda *a: None); c.close(); print('Discord Social SDK loaded')"
       - name: Build executable
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed \
+          pyinstaller --noconfirm --clean --noupx --onefile --windowed \
             --name ISpotify \
             --add-data "assets:assets" \
             --add-data "vendor/discord_social_sdk/License-Notices.txt:discord_social_sdk" \

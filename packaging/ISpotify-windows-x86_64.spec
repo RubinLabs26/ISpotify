@@ -36,7 +36,9 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    # UPX makes the one-file executable smaller but forces a slow decompression
+    # pass before Python can start. Startup speed matters more for this app.
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,

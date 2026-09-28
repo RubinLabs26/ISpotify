@@ -9,7 +9,6 @@ understands the prototype's files when it is run from an old checkout.
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 
 APP_NAME = "ishpoitfy"
@@ -36,8 +35,8 @@ def migrate_legacy_storage() -> None:
     """Copy the prototype's local storage into XDG storage once.
 
     Nothing is removed from the old checkout. Existing library entries keep
-    their original file paths, so this migration is safe even if a user has
-    partially downloaded a file.
+    their original file paths, so the old download directory does not need to
+    be copied into the new data directory during startup.
     """
 
     ensure_directories()
@@ -47,13 +46,3 @@ def migrate_legacy_storage() -> None:
             shutil.copy2(legacy_library, LIBRARY_FILE)
         except OSError:
             pass
-
-    legacy_downloads = PROJECT_ROOT / "downloads"
-    if legacy_downloads.exists():
-        for source in legacy_downloads.iterdir():
-            target = DOWNLOAD_DIR / source.name
-            if source.is_file() and not target.exists():
-                try:
-                    shutil.copy2(source, target)
-                except OSError:
-                    pass
