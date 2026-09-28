@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import (
     QEasingCurve, QPoint, QProcess, QPropertyAnimation, QTimer, QSize, Qt, QUrl,
     QVariantAnimation,
 )
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QAction, QDesktopServices, QIcon
 from PySide6.QtMultimedia import QMediaPlayer
-from PySide6.QtWidgets import QApplication, QGraphicsOpacityEffect, QMessageBox
+from PySide6.QtWidgets import (
+    QApplication, QGraphicsOpacityEffect, QMenu, QMessageBox, QSystemTrayIcon,
+)
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QMainWindow, QStackedWidget,
     QVBoxLayout, QWidget,
@@ -42,6 +46,7 @@ SIDEBAR_WIDTH = 200
 BRAND_MARK_STYLE = "color: #f2f1ec; font-size: 10pt;"
 DISCO_TICK_MS = 90
 DISCO_TICKS = 12_000 // DISCO_TICK_MS
+UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000
 
 
 def _count(value: int, noun: str) -> str:
@@ -73,7 +78,9 @@ class MainWindow(QMainWindow):
         self.discord_presence = DiscordPresence(self)
         self.updater = UpdateManager(self)
         self._update_version = ""
+        self._update_notified_version = ""
         self._package_install = None
+        self._setup_update_notifications()
         self._discord_refresh_timer = QTimer(self)
         self._discord_refresh_timer.setInterval(30_000)
         self._discord_refresh_timer.timeout.connect(self._sync_discord_presence)
@@ -81,9 +88,11 @@ class MainWindow(QMainWindow):
         self._setup_easter_eggs()
         self._configure_discord(self.settings.discord_config())
         self.navigate("home")
-        QTimer.singleShot(3000, self.updater.check)
+        # Check once after the first paint, then periodically without blocking
+        # startup or creating unnecessary GitHub API traffic.
+        QTimer.singleShot(5000, self.updater.check)
         self._update_timer = QTimer(self)
-        self._update_timer.setInterval(6 * 60 * 60 * 1000)
+        self._update_timer.setInterval(UPDATE_CHECK_INTERVAL_MS)
         self._update_timer.timeout.connect(self.updater.check)
         self._update_timer.start()
         QTimer.singleShot(0, self._start_next_download)
@@ -158,6 +167,39 @@ class MainWindow(QMainWindow):
         self.toast_manager = ToastManager(root)
         self.toast_manager.raise_()
         self.setCentralWidget(root)
+
+    def _setup_update_notifications(self) -> None:
+        """Set up native update notifications where the desktop supports them."""
+        self._tray_icon = None
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        icon_path = Path(__file__).resolve().parents[1] / "assets" / "branding" / "ispotify-logo.png"
+        tray = QSystemTrayIcon(QIcon(str(icon_path)), self)
+        tray.setToolTip("iSpotify")
+        menu = QMenu(self)
+        show_action = QAction("Open iSpotify", menu)
+        show_action.triggered.connect(self._restore_from_notification)
+        menu.addAction(show_action)
+        menu.addSeparator()
+        quit_action = QAction("Quit", menu)
+        quit_action.triggered.connect(QApplication.quit)
+        menu.addAction(quit_action)
+        tray.setContextMenu(menu)
+        tray.activated.connect(
+            lambda reason: self._restore_from_notification()
+            if reason in (
+                QSystemTrayIcon.Trigger,
+                QSystemTrayIcon.DoubleClick,
+            ) else None
+        )
+        tray.show()
+        self._tray_icon = tray
+
+    def _restore_from_notification(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+        self.navigate("settings")
 
     def _build_sidebar(self):
         sidebar = QFrame()
@@ -384,6 +426,15 @@ class MainWindow(QMainWindow):
             self.toast_manager.show_toast(
                 "Update available", f"iSpotify v{version} is ready.", "info"
             )
+            if self._update_notified_version != version:
+                self._update_notified_version = version
+                if self._tray_icon is not None:
+                    self._tray_icon.showMessage(
+                        "iSpotify update available",
+                        f"Version {version} is ready. Open Settings to install it.",
+                        QSystemTrayIcon.Information,
+                        8000,
+                    )
 
     def _on_up_to_date(self) -> None:
         self._update_version = ""
@@ -885,6 +936,8 @@ class MainWindow(QMainWindow):
         self.downloader.cancel()
         self.discord_presence.close()
         self.player.close()
+        if self._tray_icon is not None:
+            self._tray_icon.hide()
         event.accept()
 
     def resizeEvent(self, event):
