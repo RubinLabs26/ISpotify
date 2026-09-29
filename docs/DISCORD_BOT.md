@@ -19,10 +19,11 @@ Set up the clean server layout (category, channels, and roles) idempotently:
 python tools/discord_server_setup.py
 ```
 
-Use `--dry-run` to preview changes. The setup creates a `Lumi Labs` category
-with `welcome`, `announcements`, `general`, `support`, `youtube`, and `github`
-channels, plus `Lumi Labs`, `iSpotify`, and `Contributor` roles. Existing items
-with the same names are left untouched.
+Use `--dry-run` to preview changes. The setup creates a styled Lumi Labs
+category with information, community, development, voice, staff, and bot areas,
+plus colored roles and custom `lumi`, `music`, `youtube`, and `github` emojis.
+Discord does not provide custom font files, so channel and role names use
+Unicode small-cap lettering that works in the desktop and mobile clients.
 
 Bot tokens are passwords. If a token is pasted into chat, a screenshot, an
 issue, or a log, regenerate it immediately in Discord Developer Portal and
