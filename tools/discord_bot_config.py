@@ -39,5 +39,10 @@ def config() -> dict[str, str | bool]:
     }
 
 
+def bot_token() -> str:
+    load_dotenv()
+    return os.getenv("DISCORD_BOT_TOKEN", "").strip()
+
+
 if __name__ == "__main__":
     print(json.dumps(config(), indent=2))
