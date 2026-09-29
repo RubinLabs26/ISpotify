@@ -13,8 +13,8 @@ from PySide6.QtWidgets import QApplication
 from ui.main_window import MainWindow
 from ui.theme import install_theme
 
-APP_ORGANIZATION = "Rubin Labs"
-APP_COPYRIGHT = "© Rubin Labs"
+APP_ORGANIZATION = "Lumi Labs"
+APP_COPYRIGHT = "© Lumi Labs"
 
 
 def main():

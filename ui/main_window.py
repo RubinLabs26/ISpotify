@@ -238,7 +238,7 @@ class MainWindow(QMainWindow):
             self._nav_buttons.append((key, button))
             layout.addWidget(button)
         layout.addStretch()
-        footer = QLabel("© Rubin Labs")
+        footer = QLabel("© Lumi Labs")
         footer.setObjectName("muted")
         footer.setStyleSheet("font-size: 8pt; letter-spacing: 0.3px;")
         layout.addWidget(footer)
@@ -402,7 +402,7 @@ class MainWindow(QMainWindow):
         ]
         self.toast_manager.show_toast(
             "You found the vault",
-            " · ".join(stats) + f"\niSpotify v{APP_VERSION}, made with care by Rubin Labs.",
+            " · ".join(stats) + f"\niSpotify v{APP_VERSION}, made with care by Lumi Labs.",
             "success", timeout=6500,
         )
 

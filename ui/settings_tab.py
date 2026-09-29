@@ -66,7 +66,7 @@ class SettingsTab(QWidget):
         enable_smooth_scroll(scroll)
         outer.addWidget(scroll)
 
-        self._settings = QSettings("Rubin Labs", "iSpotify")
+        self._settings = QSettings("Lumi Labs", "iSpotify")
         discord_card = QFrame()
         discord_card.setObjectName("card")
         discord_layout = QVBoxLayout(discord_card)
