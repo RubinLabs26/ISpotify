@@ -206,7 +206,7 @@ install_from_repository() {
   section "Signed package repository"
   case "$manager" in
     apt-get)
-      step "Downloading the Rubin Labs package signing key"
+      step "Downloading the Lumi Labs package signing key"
       download_repository_key gpg "$setup_dir/ispotify-archive-keyring.gpg"
       run_as_root install -Dm644 "$setup_dir/ispotify-archive-keyring.gpg" \
         /usr/share/keyrings/ispotify-archive-keyring.gpg
@@ -220,7 +220,7 @@ install_from_repository() {
       run_as_root apt-get install -y ispotify
       ;;
     pacman)
-      step "Downloading the Rubin Labs package signing key"
+      step "Downloading the Lumi Labs package signing key"
       download_repository_key asc "$setup_dir/ispotify-archive-keyring.asc"
       run_as_root pacman-key --init
       run_as_root pacman-key --add "$setup_dir/ispotify-archive-keyring.asc"

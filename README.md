@@ -156,7 +156,7 @@ Licensed under the [MIT License](LICENSE).
 
 ---
 
-**iSpotify is an independent project from Rubin Labs and its contributors.**
+**iSpotify is an independent project from Lumi Labs and its contributors.**
 
 It is not affiliated with or endorsed by Spotify AB, YouTube, Google, or
 Discord. Product names and trademarks belong to their respective owners.
