@@ -9,6 +9,7 @@ understands the prototype's files when it is run from an old checkout.
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
 APP_NAME = "ishpoitfy"
