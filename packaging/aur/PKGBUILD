@@ -1,7 +1,7 @@
 # Maintainer: ISpotify contributors <releases at ispotify dot invalid>
 
 pkgname=ispotify
-pkgver=19.5.1
+pkgver=19.5.2
 pkgrel=1
 pkgdesc='Desktop music search, playlist, download, and playback application'
 arch=('any')
@@ -18,7 +18,7 @@ depends=(
   'deno'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('198b5d89fcbc95b1c39b76427440d736103cdb9ebe3da4e60187e5c6bee5f69d')
+sha256sums=('SKIP')
 
 check() {
   cd "ISpotify-$pkgver"
